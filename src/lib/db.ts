@@ -13,19 +13,24 @@ const fire = (p: PromiseLike<{ error: unknown }>) =>
 
 export const db = {
   loadAll: async () => {
-    const [g, p, c, t, dt] = await Promise.all([
+    const settled = await Promise.allSettled([
       supabase.from('project_groups').select('*'),
       supabase.from('projects').select('*'),
       supabase.from('board_columns').select('*'),
       supabase.from('tasks').select('*'),
       supabase.from('daily_tasks').select('*'),
     ])
+    const [g, p, c, t, dt] = settled.map((r) => {
+      if (r.status === 'rejected') { console.error('DB query failed:', r.reason); return { data: null } }
+      if (r.value.error) console.error('DB query error:', r.value.error.message)
+      return r.value
+    })
     return {
-      groups:      (g.data  ?? []).map(toGroup),
-      projects:    (p.data  ?? []).map(toProject),
-      columns:     (c.data  ?? []).map(toColumn),
-      tasks:       (t.data  ?? []).map(toTask),
-      dailyTasks:  (dt.data ?? []).map(toDailyTask),
+      groups:     (g.data  ?? []).map(toGroup),
+      projects:   (p.data  ?? []).map(toProject),
+      columns:    (c.data  ?? []).map(toColumn),
+      tasks:      (t.data  ?? []).map(toTask),
+      dailyTasks: (dt.data ?? []).map(toDailyTask),
     }
   },
 
