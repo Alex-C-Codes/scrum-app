@@ -36,6 +36,7 @@ export interface DailyTask {
   taskId: string
   date: string   // 'YYYY-MM-DD'
   order: number
+  completed: boolean
 }
 
 export type AppView = 'board' | 'daily'

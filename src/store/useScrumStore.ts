@@ -21,6 +21,7 @@ interface ScrumState {
   addToDaily: (taskId: string, date: string, insertAt?: number) => void
   removeFromDaily: (id: string) => void
   reorderDailyTasks: (date: string, orderedIds: string[]) => void
+  toggleDailyTaskComplete: (id: string) => void
 
   // Groups
   addGroup: (name: string) => void
@@ -82,7 +83,7 @@ export const useScrumStore = create<ScrumState>()((set, get) => ({
     if (s.dailyTasks.some((dt) => dt.taskId === taskId && dt.date === date)) return
     const dayTasks = s.dailyTasks.filter((dt) => dt.date === date).sort((a, b) => a.order - b.order)
     const pos = insertAt !== undefined ? Math.max(0, Math.min(insertAt, dayTasks.length)) : dayTasks.length
-    const newEntry: DailyTask = { id: uuid(), taskId, date, order: pos }
+    const newEntry: DailyTask = { id: uuid(), taskId, date, order: pos, completed: false }
     dayTasks.splice(pos, 0, newEntry)
     const reordered = dayTasks.map((dt, i) => ({ ...dt, order: i }))
     set((s) => ({ dailyTasks: [...s.dailyTasks.filter((dt) => dt.date !== date), ...reordered] }))
@@ -107,6 +108,14 @@ export const useScrumStore = create<ScrumState>()((set, get) => ({
       .map((dt) => ({ ...dt, order: orderedIds.indexOf(dt.id) }))
     set((s) => ({ dailyTasks: s.dailyTasks.map((dt) => dt.date === date ? { ...dt, order: orderedIds.indexOf(dt.id) } : dt) }))
     db.dailyTasks.upsertMany(reordered)
+  },
+
+  toggleDailyTaskComplete: (id) => {
+    const dt = get().dailyTasks.find((d) => d.id === id)
+    if (!dt) return
+    const updated = { ...dt, completed: !dt.completed }
+    set((s) => ({ dailyTasks: s.dailyTasks.map((d) => d.id === id ? updated : d) }))
+    db.dailyTasks.upsertMany([updated])
   },
 
   // ── Groups ────────────────────────────────────────────────────────────────

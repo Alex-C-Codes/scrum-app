@@ -11,7 +11,7 @@ import type { DailyTask, Task } from '../types'
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-const toDateStr = (d: Date) => d.toLocaleDateString('en-CA') // YYYY-MM-DD
+const toDateStr = (d: Date) => d.toLocaleDateString('en-CA')
 
 const formatDate = (dateStr: string) => {
   const [y, m, day] = dateStr.split('-').map(Number)
@@ -25,20 +25,37 @@ const formatDate = (dateStr: string) => {
 
 const shiftDate = (dateStr: string, days: number) => {
   const [y, m, d] = dateStr.split('-').map(Number)
-  const date = new Date(y, m - 1, d + days)
-  return toDateStr(date)
+  return toDateStr(new Date(y, m - 1, d + days))
+}
+
+// ─── Done drop zone ───────────────────────────────────────────────────────────
+
+function DoneDropZone({ isEmpty }: { isEmpty: boolean }) {
+  const { setNodeRef, isOver } = useDroppable({ id: 'done-zone', data: { type: 'done-zone' } })
+  return (
+    <div
+      ref={setNodeRef}
+      className={`flex items-center justify-center rounded-xl border-2 border-dashed transition-all ${
+        isOver
+          ? 'border-green-400 bg-green-50 py-5'
+          : isEmpty
+          ? 'border-gray-200 py-3'
+          : 'border-gray-200 py-2'
+      }`}
+    >
+      <span className={`text-sm transition-colors ${isOver ? 'text-green-500 font-medium' : 'text-gray-400'}`}>
+        {isOver ? '✓ Mark as done' : '↓ Drag here to complete'}
+      </span>
+    </div>
+  )
 }
 
 // ─── Sortable priority item ───────────────────────────────────────────────────
 
 function PriorityItem({ dailyTask, rank, task, projectName, columnName }: {
-  dailyTask: DailyTask
-  rank: number
-  task: Task
-  projectName: string
-  columnName: string
+  dailyTask: DailyTask; rank: number; task: Task; projectName: string; columnName: string
 }) {
-  const { removeFromDaily } = useScrumStore()
+  const { removeFromDaily, toggleDailyTaskComplete } = useScrumStore()
   const { setNodeRef, attributes, listeners, transform, transition, isDragging } = useSortable({
     id: dailyTask.id,
     data: { type: 'priority-item' },
@@ -48,30 +65,58 @@ function PriorityItem({ dailyTask, rank, task, projectName, columnName }: {
     <div
       ref={setNodeRef}
       style={{ transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.4 : 1, backgroundColor: task.color }}
-      className="flex items-start gap-3 rounded-lg px-3 py-2.5 shadow-sm border border-black/10 group/item"
+      className="flex items-start gap-2 rounded-lg px-3 py-2.5 shadow-sm border border-black/10 group/item"
     >
-      <span
-        {...attributes} {...listeners}
-        className="mt-0.5 text-gray-400 hover:text-gray-600 cursor-grab active:cursor-grabbing flex-shrink-0 pt-0.5"
-      >
+      <span {...attributes} {...listeners} className="mt-1 text-gray-400 hover:text-gray-600 cursor-grab active:cursor-grabbing flex-shrink-0">
         <svg width="10" height="14" viewBox="0 0 10 14" fill="currentColor">
           <circle cx="3" cy="3" r="1.2"/><circle cx="7" cy="3" r="1.2"/>
           <circle cx="3" cy="7" r="1.2"/><circle cx="7" cy="7" r="1.2"/>
           <circle cx="3" cy="11" r="1.2"/><circle cx="7" cy="11" r="1.2"/>
         </svg>
       </span>
-      <span className="w-5 h-5 rounded-full bg-black/10 text-gray-700 text-xs font-bold flex items-center justify-center flex-shrink-0 mt-0.5">
-        {rank}
-      </span>
+      <span className="w-5 h-5 rounded-full bg-black/10 text-gray-700 text-xs font-bold flex items-center justify-center flex-shrink-0 mt-0.5">{rank}</span>
       <div className="flex-1 min-w-0">
         <p className="text-sm font-semibold text-gray-800 truncate">{task.title}</p>
         <p className="text-xs text-gray-500 mt-0.5">{projectName} · {columnName}</p>
       </div>
+      <div className="flex gap-1 flex-shrink-0 opacity-0 group-hover/item:opacity-100">
+        <button
+          className="w-6 h-6 rounded-full border-2 border-green-400 text-green-500 hover:bg-green-50 flex items-center justify-center text-xs font-bold"
+          onPointerDown={(e) => e.stopPropagation()}
+          onClick={() => toggleDailyTaskComplete(dailyTask.id)}
+          title="Mark as done"
+        >✓</button>
+        <button
+          className="w-6 h-6 rounded-full text-gray-400 hover:text-red-400 hover:bg-red-50 flex items-center justify-center text-base leading-none"
+          onPointerDown={(e) => e.stopPropagation()}
+          onClick={() => removeFromDaily(dailyTask.id)}
+          title="Remove"
+        >×</button>
+      </div>
+    </div>
+  )
+}
+
+// ─── Completed item ───────────────────────────────────────────────────────────
+
+function CompletedItem({ dailyTask, task, projectName }: {
+  dailyTask: DailyTask; task: Task; projectName: string
+}) {
+  const { removeFromDaily, toggleDailyTaskComplete } = useScrumStore()
+  return (
+    <div className="flex items-center gap-2 rounded-lg px-3 py-2 border border-gray-200 bg-gray-50 group/done">
       <button
-        className="opacity-0 group-hover/item:opacity-100 text-gray-400 hover:text-red-400 text-lg leading-none flex-shrink-0"
-        onPointerDown={(e) => e.stopPropagation()}
+        className="w-5 h-5 rounded-full border-2 border-green-400 bg-green-400 text-white flex items-center justify-center text-xs font-bold flex-shrink-0"
+        onClick={() => toggleDailyTaskComplete(dailyTask.id)}
+        title="Mark as incomplete"
+      >✓</button>
+      <div className="flex-1 min-w-0">
+        <p className="text-sm text-gray-400 line-through truncate">{task.title}</p>
+        <p className="text-xs text-gray-400 truncate">{projectName}</p>
+      </div>
+      <button
+        className="opacity-0 group-hover/done:opacity-100 text-gray-300 hover:text-red-400 text-base leading-none"
         onClick={() => removeFromDaily(dailyTask.id)}
-        title="Remove from today"
       >×</button>
     </div>
   )
@@ -85,41 +130,17 @@ function PickerTask({ task, alreadyAdded }: { task: Task; alreadyAdded: boolean 
     data: { type: 'picker-task' },
     disabled: alreadyAdded,
   })
-
   return (
     <div
       ref={setNodeRef}
       {...(alreadyAdded ? {} : { ...attributes, ...listeners })}
       className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-colors ${
-        alreadyAdded
-          ? 'text-gray-400 bg-gray-50 cursor-default'
-          : 'text-gray-700 hover:bg-gray-100 cursor-grab active:cursor-grabbing'
+        alreadyAdded ? 'text-gray-400 cursor-default' : 'text-gray-700 hover:bg-gray-100 cursor-grab active:cursor-grabbing'
       } ${isDragging ? 'opacity-40' : ''}`}
       style={{ backgroundColor: alreadyAdded ? undefined : task.color + '55' }}
     >
-      {alreadyAdded
-        ? <span className="text-green-500 text-xs">✓</span>
-        : <span className="text-gray-400 text-xs">⠿</span>
-      }
+      {alreadyAdded ? <span className="text-green-500 text-xs">✓</span> : <span className="text-gray-400 text-xs">⠿</span>}
       <span className="truncate flex-1">{task.title}</span>
-    </div>
-  )
-}
-
-// ─── Empty drop zone ──────────────────────────────────────────────────────────
-
-function EmptyDropZone() {
-  const { setNodeRef, isOver } = useDroppable({ id: 'priority-list-empty', data: { type: 'priority-list' } })
-  return (
-    <div
-      ref={setNodeRef}
-      className={`flex-1 flex items-center justify-center rounded-xl border-2 border-dashed transition-colors min-h-40 ${
-        isOver ? 'border-indigo-400 bg-indigo-50' : 'border-gray-200'
-      }`}
-    >
-      <p className="text-sm text-gray-400 text-center px-4">
-        {isOver ? 'Drop to add' : 'Drag tasks here from the panel →'}
-      </p>
     </div>
   )
 }
@@ -127,33 +148,25 @@ function EmptyDropZone() {
 // ─── DailyView ────────────────────────────────────────────────────────────────
 
 export function DailyView() {
-  const { projects, columns, tasks, dailyTasks, addToDaily, reorderDailyTasks } = useScrumStore()
+  const { projects, columns, tasks, dailyTasks, addToDaily, reorderDailyTasks, toggleDailyTaskComplete } = useScrumStore()
   const [date, setDate] = useState(toDateStr(new Date()))
   const [search, setSearch] = useState('')
-  const [activeDrag, setActiveDrag] = useState<{ type: 'picker-task' | 'priority-item'; id: string } | null>(null)
+  const [activeDrag, setActiveDrag] = useState<{ type: string; id: string } | null>(null)
 
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }))
 
-  const todayEntries = dailyTasks
-    .filter((dt) => dt.date === date)
-    .sort((a, b) => a.order - b.order)
+  const allDayEntries = dailyTasks.filter((dt) => dt.date === date)
+  const priorityEntries = allDayEntries.filter((dt) => !dt.completed).sort((a, b) => a.order - b.order)
+  const completedEntries = allDayEntries.filter((dt) => dt.completed).sort((a, b) => a.order - b.order)
+  const assignedTaskIds = new Set(allDayEntries.map((dt) => dt.taskId))
 
-  const assignedTaskIds = new Set(todayEntries.map((dt) => dt.taskId))
-
-  // Tasks in the picker: all tasks, filtered by search
-  const pickerTasks = tasks.filter((t) => {
-    if (!search) return true
-    return t.title.toLowerCase().includes(search.toLowerCase())
-  })
-
-  // Group picker tasks by project
+  const pickerTasks = tasks.filter((t) => !search || t.title.toLowerCase().includes(search.toLowerCase()))
   const projectsWithTasks = projects
     .map((p) => ({ project: p, tasks: pickerTasks.filter((t) => t.projectId === p.id) }))
     .filter((g) => g.tasks.length > 0)
 
-  const onDragStart = ({ active }: DragStartEvent) => {
+  const onDragStart = ({ active }: DragStartEvent) =>
     setActiveDrag({ type: active.data.current?.type, id: active.id as string })
-  }
 
   const onDragEnd = ({ active, over }: DragEndEvent) => {
     setActiveDrag(null)
@@ -164,24 +177,26 @@ export function DailyView() {
 
     if (activeType === 'picker-task') {
       const taskId = active.id as string
-      if (overType === 'priority-item') {
-        const overIndex = todayEntries.findIndex((dt) => dt.id === over.id)
-        addToDaily(taskId, date, overIndex === -1 ? todayEntries.length : overIndex)
-      } else {
-        addToDaily(taskId, date)
-      }
+      const overIndex = overType === 'priority-item' ? priorityEntries.findIndex((dt) => dt.id === over.id) : -1
+      addToDaily(taskId, date, overIndex === -1 ? priorityEntries.length : overIndex)
     } else if (activeType === 'priority-item') {
-      const oldIndex = todayEntries.findIndex((dt) => dt.id === active.id)
-      const newIndex = todayEntries.findIndex((dt) => dt.id === over.id)
-      if (oldIndex !== -1 && newIndex !== -1 && oldIndex !== newIndex) {
-        reorderDailyTasks(date, arrayMove(todayEntries, oldIndex, newIndex).map((dt) => dt.id))
+      if (overType === 'done-zone') {
+        toggleDailyTaskComplete(active.id as string)
+      } else if (overType === 'priority-item') {
+        const oldIndex = priorityEntries.findIndex((dt) => dt.id === active.id)
+        const newIndex = priorityEntries.findIndex((dt) => dt.id === over.id)
+        if (oldIndex !== -1 && newIndex !== -1 && oldIndex !== newIndex) {
+          reorderDailyTasks(date, arrayMove(priorityEntries, oldIndex, newIndex).map((dt) => dt.id))
+        }
       }
     }
   }
 
-  const activeDragTask = activeDrag
-    ? tasks.find((t) => t.id === (activeDrag.type === 'picker-task' ? activeDrag.id : todayEntries.find((dt) => dt.id === activeDrag.id)?.taskId))
-    : null
+  const activeDragTask = activeDrag ? tasks.find((t) =>
+    t.id === (activeDrag.type === 'picker-task'
+      ? activeDrag.id
+      : allDayEntries.find((dt) => dt.id === activeDrag.id)?.taskId)
+  ) : null
 
   return (
     <div className="flex-1 flex flex-col overflow-hidden">
@@ -204,47 +219,65 @@ export function DailyView() {
             </button>
           )}
         </div>
-        <span className="text-sm text-gray-500">{todayEntries.length} task{todayEntries.length !== 1 ? 's' : ''}</span>
+        <div className="flex items-center gap-3 text-sm text-gray-500">
+          {completedEntries.length > 0 && <span className="text-green-500 font-medium">{completedEntries.length} done</span>}
+          <span>{priorityEntries.length} remaining</span>
+        </div>
       </div>
 
-      {/* Body */}
       <DndContext sensors={sensors} collisionDetection={closestCenter} onDragStart={onDragStart} onDragEnd={onDragEnd}>
         <div className="flex-1 flex overflow-hidden">
 
-          {/* Priority list */}
-          <div className="flex-1 flex flex-col overflow-y-auto p-6 gap-3">
-            <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Priority</h3>
-            {todayEntries.length === 0 ? (
-              <EmptyDropZone />
-            ) : (
-              <SortableContext items={todayEntries.map((dt) => dt.id)} strategy={verticalListSortingStrategy}>
-                <div className="flex flex-col gap-2">
-                  {todayEntries.map((dt, i) => {
-                    const task = tasks.find((t) => t.id === dt.taskId)
-                    if (!task) return null
-                    const project = projects.find((p) => p.id === task.projectId)
-                    const column = columns.find((c) => c.id === task.columnId)
-                    return (
-                      <PriorityItem
-                        key={dt.id}
-                        dailyTask={dt}
-                        rank={i + 1}
-                        task={task}
-                        projectName={project?.name ?? 'Unknown'}
-                        columnName={column?.title ?? 'Unknown'}
-                      />
-                    )
-                  })}
+          {/* Left: priority + done */}
+          <div className="flex-1 flex flex-col overflow-y-auto p-6 gap-4">
+
+            {/* Priority list */}
+            <div className="flex flex-col gap-2">
+              <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Priority</h3>
+              {priorityEntries.length === 0 && completedEntries.length === 0 ? (
+                <div className="flex items-center justify-center rounded-xl border-2 border-dashed border-gray-200 min-h-32">
+                  <p className="text-sm text-gray-400">Drag tasks here from the panel →</p>
                 </div>
-              </SortableContext>
+              ) : (
+                <SortableContext items={priorityEntries.map((dt) => dt.id)} strategy={verticalListSortingStrategy}>
+                  <div className="flex flex-col gap-2">
+                    {priorityEntries.map((dt, i) => {
+                      const task = tasks.find((t) => t.id === dt.taskId)
+                      if (!task) return null
+                      const project = projects.find((p) => p.id === task.projectId)
+                      const column = columns.find((c) => c.id === task.columnId)
+                      return (
+                        <PriorityItem key={dt.id} dailyTask={dt} rank={i + 1} task={task}
+                          projectName={project?.name ?? 'Unknown'} columnName={column?.title ?? 'Unknown'} />
+                      )
+                    })}
+                  </div>
+                </SortableContext>
+              )}
+            </div>
+
+            {/* Done drop zone — always visible when there are priority items */}
+            {priorityEntries.length > 0 && <DoneDropZone isEmpty={completedEntries.length === 0} />}
+
+            {/* Completed section */}
+            {completedEntries.length > 0 && (
+              <div className="flex flex-col gap-2">
+                <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Done · {completedEntries.length}</h3>
+                {completedEntries.map((dt) => {
+                  const task = tasks.find((t) => t.id === dt.taskId)
+                  if (!task) return null
+                  const project = projects.find((p) => p.id === task.projectId)
+                  return <CompletedItem key={dt.id} dailyTask={dt} task={task} projectName={project?.name ?? 'Unknown'} />
+                })}
+              </div>
             )}
           </div>
 
           {/* Divider */}
           <div className="w-px bg-gray-200 flex-shrink-0" />
 
-          {/* Task picker */}
-          <div className="w-72 flex-shrink-0 flex flex-col overflow-hidden border-l border-gray-200">
+          {/* Right: task picker */}
+          <div className="w-72 flex-shrink-0 flex flex-col overflow-hidden">
             <div className="p-4 border-b border-gray-100">
               <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">Add Tasks</h3>
               <input
@@ -255,16 +288,12 @@ export function DailyView() {
               />
             </div>
             <div className="flex-1 overflow-y-auto p-3 flex flex-col gap-4">
-              {projectsWithTasks.length === 0 && (
-                <p className="text-sm text-gray-400 text-center py-8">No tasks found</p>
-              )}
+              {projectsWithTasks.length === 0 && <p className="text-sm text-gray-400 text-center py-8">No tasks found</p>}
               {projectsWithTasks.map(({ project, tasks: pts }) => (
                 <div key={project.id}>
                   <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider px-1 mb-1">{project.name}</p>
                   <div className="flex flex-col gap-0.5">
-                    {pts.map((t) => (
-                      <PickerTask key={t.id} task={t} alreadyAdded={assignedTaskIds.has(t.id)} />
-                    ))}
+                    {pts.map((t) => <PickerTask key={t.id} task={t} alreadyAdded={assignedTaskIds.has(t.id)} />)}
                   </div>
                 </div>
               ))}
@@ -274,7 +303,8 @@ export function DailyView() {
 
         <DragOverlay dropAnimation={null}>
           {activeDragTask && (
-            <div className="rounded-lg px-3 py-2 shadow-xl text-sm font-semibold text-gray-800 rotate-1 opacity-95 border border-black/10 w-56" style={{ backgroundColor: activeDragTask.color }}>
+            <div className="rounded-lg px-3 py-2 shadow-xl text-sm font-semibold text-gray-800 rotate-1 opacity-95 border border-black/10 w-56"
+              style={{ backgroundColor: activeDragTask.color }}>
               {activeDragTask.title}
             </div>
           )}

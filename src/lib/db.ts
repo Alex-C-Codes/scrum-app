@@ -6,7 +6,7 @@ const toGroup     = (r: Record<string, unknown>): ProjectGroup => ({ id: r.id as
 const toProject   = (r: Record<string, unknown>): Project      => ({ id: r.id as string, name: r.name as string, groupId: r.group_id as string | null, order: r.order as number, createdAt: new Date(r.created_at as string).getTime() })
 const toColumn    = (r: Record<string, unknown>): Column       => ({ id: r.id as string, title: r.title as string, projectId: r.project_id as string, order: r.order as number })
 const toTask      = (r: Record<string, unknown>): Task         => ({ id: r.id as string, title: r.title as string, description: r.description as string, color: r.color as string, columnId: r.column_id as string, projectId: r.project_id as string, order: r.order as number, createdAt: new Date(r.created_at as string).getTime() })
-const toDailyTask = (r: Record<string, unknown>): DailyTask    => ({ id: r.id as string, taskId: r.task_id as string, date: r.date as string, order: r.order as number })
+const toDailyTask = (r: Record<string, unknown>): DailyTask    => ({ id: r.id as string, taskId: r.task_id as string, date: r.date as string, order: r.order as number, completed: (r.completed as boolean) ?? false })
 
 const fire = (p: PromiseLike<{ error: unknown }>) =>
   Promise.resolve(p).then(({ error }) => { if (error) console.error(error) })
@@ -61,7 +61,7 @@ export const db = {
   },
 
   dailyTasks: {
-    upsertMany: (dts: DailyTask[]) => fire(supabase.from('daily_tasks').upsert(dts.map((d) => ({ id: d.id, task_id: d.taskId, date: d.date, order: d.order })))),
+    upsertMany: (dts: DailyTask[]) => fire(supabase.from('daily_tasks').upsert(dts.map((d) => ({ id: d.id, task_id: d.taskId, date: d.date, order: d.order, completed: d.completed })))),
     delete:     (id: string)       => fire(supabase.from('daily_tasks').delete().eq('id', id)),
   },
 }
