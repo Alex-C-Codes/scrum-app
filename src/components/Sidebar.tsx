@@ -55,7 +55,7 @@ function GripIcon() {
 // ─── Sortable project row ─────────────────────────────────────────────────────
 
 function SortableProjectRow({ project, isActive }: { project: Project; isActive: boolean }) {
-  const { groups, renameProject, moveProjectToGroup, deleteProject, setActiveProject } = useScrumStore()
+  const { groups, renameProject, moveProjectToGroup, deleteProject, setActiveProject, setCurrentView } = useScrumStore()
   const [editing, setEditing] = useState(false)
   const [name, setName] = useState(project.name)
 
@@ -120,7 +120,7 @@ function SortableProjectRow({ project, isActive }: { project: Project; isActive:
         className={`flex-1 min-w-0 text-left text-xs rounded px-2 py-2 transition-colors flex items-center gap-1 ${
           isActive ? 'bg-indigo-600 text-white' : 'text-gray-300 hover:bg-gray-700'
         }`}
-        onClick={() => setActiveProject(project.id)}
+        onClick={() => { setActiveProject(project.id); setCurrentView('board') }}
       >
         <span className="truncate flex-1">{project.name}</span>
         <span className="flex items-center gap-0.5 opacity-0 group-hover/row:opacity-100">
@@ -164,7 +164,7 @@ function GroupDropZone({ groupId, children, empty }: { groupId: string | null; c
 // ─── Sidebar ─────────────────────────────────────────────────────────────────
 
 export function Sidebar() {
-  const { groups, projects, activeProjectId, addProject, addGroup, renameGroup, deleteGroup, toggleGroupCollapsed, moveProject } = useScrumStore()
+  const { groups, projects, activeProjectId, currentView, setCurrentView, addProject, addGroup, renameGroup, deleteGroup, toggleGroupCollapsed, moveProject } = useScrumStore()
 
   const [addingProject, setAddingProject] = useState<string | 'ungrouped' | null>(null)
   const [newProjectName, setNewProjectName] = useState('')
@@ -218,6 +218,20 @@ export function Sidebar() {
       </div>
 
       <div className="flex-1 overflow-y-auto py-3 flex flex-col gap-0.5">
+        {/* Today shortcut */}
+        <button
+          className={`mx-2 mb-2 flex items-center gap-2 text-sm rounded-lg px-3 py-2 transition-colors ${
+            currentView === 'daily' ? 'bg-indigo-600 text-white' : 'text-gray-300 hover:bg-gray-700'
+          }`}
+          onClick={() => setCurrentView('daily')}
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>
+          </svg>
+          Daily Tasks
+        </button>
+        <div className="mx-2 mb-1 border-t border-gray-800" />
+
         <DndContext sensors={sensors} collisionDetection={closestCenter} onDragStart={onDragStart} onDragEnd={onDragEnd}>
 
           {/* Named groups */}

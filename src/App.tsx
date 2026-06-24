@@ -1,10 +1,11 @@
 import { useEffect } from 'react'
 import { Sidebar } from './components/Sidebar'
 import { Board } from './components/Board'
+import { DailyView } from './components/DailyView'
 import { useScrumStore } from './store/useScrumStore'
 
 export default function App() {
-  const { isLoading, loadError, activeProjectId, addProject, setActiveProject, loadData } = useScrumStore()
+  const { isLoading, loadError, activeProjectId, currentView, addProject, setActiveProject, loadData } = useScrumStore()
 
   useEffect(() => {
     loadData()
@@ -47,7 +48,9 @@ export default function App() {
     <div className="flex h-screen overflow-hidden bg-white">
       <Sidebar />
       <main className="flex-1 flex flex-col overflow-hidden">
-        {activeProjectId ? (
+        {currentView === 'daily' ? (
+          <DailyView />
+        ) : activeProjectId ? (
           <Board />
         ) : (
           <div className="flex-1 flex items-center justify-center text-gray-400">

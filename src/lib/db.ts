@@ -1,28 +1,31 @@
 import { supabase } from './supabase'
-import type { Task, Column, Project, ProjectGroup } from '../types'
+import type { Task, Column, Project, ProjectGroup, DailyTask } from '../types'
 
 // Map DB snake_case rows → TS camelCase types
-const toGroup  = (r: Record<string, unknown>): ProjectGroup => ({ id: r.id as string, name: r.name as string, order: r.order as number, collapsed: r.collapsed as boolean })
-const toProject = (r: Record<string, unknown>): Project     => ({ id: r.id as string, name: r.name as string, groupId: r.group_id as string | null, order: r.order as number, createdAt: new Date(r.created_at as string).getTime() })
-const toColumn  = (r: Record<string, unknown>): Column      => ({ id: r.id as string, title: r.title as string, projectId: r.project_id as string, order: r.order as number })
-const toTask    = (r: Record<string, unknown>): Task        => ({ id: r.id as string, title: r.title as string, description: r.description as string, color: r.color as string, columnId: r.column_id as string, projectId: r.project_id as string, order: r.order as number, createdAt: new Date(r.created_at as string).getTime() })
+const toGroup     = (r: Record<string, unknown>): ProjectGroup => ({ id: r.id as string, name: r.name as string, order: r.order as number, collapsed: r.collapsed as boolean })
+const toProject   = (r: Record<string, unknown>): Project      => ({ id: r.id as string, name: r.name as string, groupId: r.group_id as string | null, order: r.order as number, createdAt: new Date(r.created_at as string).getTime() })
+const toColumn    = (r: Record<string, unknown>): Column       => ({ id: r.id as string, title: r.title as string, projectId: r.project_id as string, order: r.order as number })
+const toTask      = (r: Record<string, unknown>): Task         => ({ id: r.id as string, title: r.title as string, description: r.description as string, color: r.color as string, columnId: r.column_id as string, projectId: r.project_id as string, order: r.order as number, createdAt: new Date(r.created_at as string).getTime() })
+const toDailyTask = (r: Record<string, unknown>): DailyTask    => ({ id: r.id as string, taskId: r.task_id as string, date: r.date as string, order: r.order as number })
 
 const fire = (p: PromiseLike<{ error: unknown }>) =>
   Promise.resolve(p).then(({ error }) => { if (error) console.error(error) })
 
 export const db = {
   loadAll: async () => {
-    const [g, p, c, t] = await Promise.all([
+    const [g, p, c, t, dt] = await Promise.all([
       supabase.from('project_groups').select('*'),
       supabase.from('projects').select('*'),
       supabase.from('board_columns').select('*'),
       supabase.from('tasks').select('*'),
+      supabase.from('daily_tasks').select('*'),
     ])
     return {
-      groups:   (g.data ?? []).map(toGroup),
-      projects: (p.data ?? []).map(toProject),
-      columns:  (c.data ?? []).map(toColumn),
-      tasks:    (t.data ?? []).map(toTask),
+      groups:      (g.data  ?? []).map(toGroup),
+      projects:    (p.data  ?? []).map(toProject),
+      columns:     (c.data  ?? []).map(toColumn),
+      tasks:       (t.data  ?? []).map(toTask),
+      dailyTasks:  (dt.data ?? []).map(toDailyTask),
     }
   },
 
@@ -50,5 +53,10 @@ export const db = {
     update:     (id: string, data: object) => fire(supabase.from('tasks').update(data).eq('id', id)),
     upsertMany: (ts: Task[])   => fire(supabase.from('tasks').upsert(ts.map((t) => ({ id: t.id, title: t.title, description: t.description, color: t.color, column_id: t.columnId, project_id: t.projectId, order: t.order })))),
     delete:     (id: string)   => fire(supabase.from('tasks').delete().eq('id', id)),
+  },
+
+  dailyTasks: {
+    upsertMany: (dts: DailyTask[]) => fire(supabase.from('daily_tasks').upsert(dts.map((d) => ({ id: d.id, task_id: d.taskId, date: d.date, order: d.order })))),
+    delete:     (id: string)       => fire(supabase.from('daily_tasks').delete().eq('id', id)),
   },
 }

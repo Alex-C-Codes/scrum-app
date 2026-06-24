@@ -31,6 +31,15 @@ export interface ProjectGroup {
   collapsed: boolean
 }
 
+export interface DailyTask {
+  id: string
+  taskId: string
+  date: string   // 'YYYY-MM-DD'
+  order: number
+}
+
+export type AppView = 'board' | 'daily'
+
 export const TASK_COLORS = [
   '#fef08a', // yellow
   '#bbf7d0', // green

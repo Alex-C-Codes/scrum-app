@@ -14,7 +14,9 @@ export function TaskCard({ task }: Props) {
   const [title, setTitle] = useState(task.title)
   const [description, setDescription] = useState(task.description)
   const [color, setColor] = useState(task.color)
-  const { updateTask, deleteTask } = useScrumStore()
+  const { updateTask, deleteTask, addToDaily, dailyTasks } = useScrumStore()
+  const todayStr = new Date().toLocaleDateString('en-CA')
+  const isInToday = dailyTasks.some((dt) => dt.taskId === task.id && dt.date === todayStr)
 
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: task.id,
@@ -106,6 +108,14 @@ export function TaskCard({ task }: Props) {
         onClick={(e) => { e.stopPropagation(); deleteTask(task.id) }}
       >
         ×
+      </button>
+      <button
+        className={`absolute bottom-1.5 right-1.5 opacity-0 group-hover:opacity-100 text-xs w-5 h-5 flex items-center justify-center rounded hover:bg-black/10 transition-opacity ${isInToday ? 'text-indigo-500' : 'text-gray-400 hover:text-indigo-500'}`}
+        onPointerDown={(e) => e.stopPropagation()}
+        onClick={(e) => { e.stopPropagation(); addToDaily(task.id, todayStr) }}
+        title={isInToday ? 'Already in today' : 'Add to today'}
+      >
+        {isInToday ? '★' : '☆'}
       </button>
       <p className="text-xs text-gray-400 mt-2">Double-click to edit</p>
     </div>

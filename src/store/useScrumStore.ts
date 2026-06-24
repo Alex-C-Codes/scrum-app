@@ -1,18 +1,26 @@
 import { create } from 'zustand'
 import { v4 as uuid } from 'uuid'
 import { db } from '../lib/db'
-import type { Task, Column, Project, ProjectGroup } from '../types'
+import type { Task, Column, Project, ProjectGroup, DailyTask, AppView } from '../types'
 
 interface ScrumState {
   groups: ProjectGroup[]
   projects: Project[]
   columns: Column[]
   tasks: Task[]
+  dailyTasks: DailyTask[]
   activeProjectId: string | null
+  currentView: AppView
   isLoading: boolean
   loadError: string | null
 
   loadData: () => Promise<void>
+  setCurrentView: (view: AppView) => void
+
+  // Daily tasks
+  addToDaily: (taskId: string, date: string, insertAt?: number) => void
+  removeFromDaily: (id: string) => void
+  reorderDailyTasks: (date: string, orderedIds: string[]) => void
 
   // Groups
   addGroup: (name: string) => void
@@ -49,7 +57,9 @@ export const useScrumStore = create<ScrumState>()((set, get) => ({
   projects: [],
   columns: [],
   tasks: [],
+  dailyTasks: [],
   activeProjectId: null,
+  currentView: 'board',
   isLoading: true,
   loadError: null,
 
@@ -61,6 +71,42 @@ export const useScrumStore = create<ScrumState>()((set, get) => ({
     } catch (err) {
       set({ isLoading: false, loadError: String(err) })
     }
+  },
+
+  setCurrentView: (view) => set({ currentView: view }),
+
+  // ── Daily tasks ───────────────────────────────────────────────────────────
+
+  addToDaily: (taskId, date, insertAt) => {
+    const s = get()
+    if (s.dailyTasks.some((dt) => dt.taskId === taskId && dt.date === date)) return
+    const dayTasks = s.dailyTasks.filter((dt) => dt.date === date).sort((a, b) => a.order - b.order)
+    const pos = insertAt !== undefined ? Math.max(0, Math.min(insertAt, dayTasks.length)) : dayTasks.length
+    const newEntry: DailyTask = { id: uuid(), taskId, date, order: pos }
+    dayTasks.splice(pos, 0, newEntry)
+    const reordered = dayTasks.map((dt, i) => ({ ...dt, order: i }))
+    set((s) => ({ dailyTasks: [...s.dailyTasks.filter((dt) => dt.date !== date), ...reordered] }))
+    db.dailyTasks.upsertMany(reordered)
+  },
+
+  removeFromDaily: (id) => {
+    const dt = get().dailyTasks.find((d) => d.id === id)
+    if (!dt) return
+    const remaining = get().dailyTasks
+      .filter((d) => d.date === dt.date && d.id !== id)
+      .sort((a, b) => a.order - b.order)
+      .map((d, i) => ({ ...d, order: i }))
+    set((s) => ({ dailyTasks: [...s.dailyTasks.filter((d) => d.date !== dt.date), ...remaining] }))
+    db.dailyTasks.delete(id)
+    if (remaining.length) db.dailyTasks.upsertMany(remaining)
+  },
+
+  reorderDailyTasks: (date, orderedIds) => {
+    const reordered = get().dailyTasks
+      .filter((dt) => dt.date === date)
+      .map((dt) => ({ ...dt, order: orderedIds.indexOf(dt.id) }))
+    set((s) => ({ dailyTasks: s.dailyTasks.map((dt) => dt.date === date ? { ...dt, order: orderedIds.indexOf(dt.id) } : dt) }))
+    db.dailyTasks.upsertMany(reordered)
   },
 
   // ── Groups ────────────────────────────────────────────────────────────────
