@@ -4,7 +4,7 @@ import { Board } from './components/Board'
 import { useScrumStore } from './store/useScrumStore'
 
 export default function App() {
-  const { isLoading, loadError, projects, activeProjectId, addProject, setActiveProject, loadData } = useScrumStore()
+  const { isLoading, loadError, activeProjectId, addProject, setActiveProject, loadData } = useScrumStore()
 
   useEffect(() => {
     loadData()
@@ -12,6 +12,7 @@ export default function App() {
 
   useEffect(() => {
     if (isLoading) return
+    const { projects } = useScrumStore.getState()
     if (projects.length === 0) {
       addProject('My First Project')
     } else if (!activeProjectId) {
