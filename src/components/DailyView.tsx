@@ -28,6 +28,24 @@ const shiftDate = (dateStr: string, days: number) => {
   return toDateStr(new Date(y, m - 1, d + days))
 }
 
+// ─── Empty priority drop zone ─────────────────────────────────────────────────
+
+function EmptyPriorityZone() {
+  const { setNodeRef, isOver } = useDroppable({ id: 'priority-zone', data: { type: 'priority-zone' } })
+  return (
+    <div
+      ref={setNodeRef}
+      className={`flex items-center justify-center rounded-xl border-2 border-dashed min-h-32 transition-all ${
+        isOver ? 'border-indigo-400 bg-indigo-50' : 'border-gray-200'
+      }`}
+    >
+      <p className={`text-sm transition-colors ${isOver ? 'text-indigo-500 font-medium' : 'text-gray-400'}`}>
+        {isOver ? '+ Add to today' : 'Drag tasks here from the panel →'}
+      </p>
+    </div>
+  )
+}
+
 // ─── Done drop zone ───────────────────────────────────────────────────────────
 
 function DoneDropZone({ isEmpty }: { isEmpty: boolean }) {
@@ -234,10 +252,8 @@ export function DailyView() {
             {/* Priority list */}
             <div className="flex flex-col gap-2">
               <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Priority</h3>
-              {priorityEntries.length === 0 && completedEntries.length === 0 ? (
-                <div className="flex items-center justify-center rounded-xl border-2 border-dashed border-gray-200 min-h-32">
-                  <p className="text-sm text-gray-400">Drag tasks here from the panel →</p>
-                </div>
+              {priorityEntries.length === 0 ? (
+                <EmptyPriorityZone />
               ) : (
                 <SortableContext items={priorityEntries.map((dt) => dt.id)} strategy={verticalListSortingStrategy}>
                   <div className="flex flex-col gap-2">

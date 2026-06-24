@@ -10,10 +10,10 @@ import {
   closestCenter,
   useDroppable,
 } from '@dnd-kit/core'
-import { SortableContext, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable'
+import { SortableContext, useSortable, verticalListSortingStrategy, arrayMove } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
 import { useScrumStore } from '../store/useScrumStore'
-import type { Project } from '../types'
+import type { Project, ProjectGroup } from '../types'
 
 // ─── Icons ───────────────────────────────────────────────────────────────────
 
@@ -108,11 +108,11 @@ function SortableProjectRow({ project, isActive }: { project: Project; isActive:
 
   return (
     <div ref={setNodeRef} style={style} className="group/row flex items-center">
-      {/* drag handle */}
       <span
         {...attributes}
         {...listeners}
-        className="pl-1 pr-0.5 py-2 text-gray-600 hover:text-gray-400 cursor-grab active:cursor-grabbing opacity-0 group-hover/row:opacity-100"
+        className="pl-1 pr-0.5 py-2 text-gray-700 hover:text-gray-400 cursor-grab active:cursor-grabbing"
+        title="Drag to reorder"
       >
         <GripIcon />
       </span>
@@ -136,12 +136,76 @@ function SortableProjectRow({ project, isActive }: { project: Project; isActive:
   )
 }
 
-// Lightweight preview shown in DragOverlay
+// ─── Sortable group header ────────────────────────────────────────────────────
+
+interface GroupHeaderProps {
+  group: ProjectGroup
+  editingGroupId: string | null
+  editGroupName: string
+  setEditingGroupId: (id: string | null) => void
+  setEditGroupName: (n: string) => void
+  saveGroupName: (id: string) => void
+}
+
+function SortableGroupHeader({ group, editingGroupId, editGroupName, setEditingGroupId, setEditGroupName, saveGroupName }: GroupHeaderProps) {
+  const { deleteGroup, toggleGroupCollapsed } = useScrumStore()
+
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
+    id: `group:${group.id}`,
+    data: { type: 'group', groupId: group.id },
+  })
+
+  const style = { transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.4 : 1 }
+
+  return (
+    <div ref={setNodeRef} style={style} className="group/grp flex items-center gap-1 px-2 py-1.5">
+      <span
+        {...attributes}
+        {...listeners}
+        className="text-gray-700 hover:text-gray-400 cursor-grab active:cursor-grabbing flex-shrink-0"
+        title="Drag to reorder group"
+      >
+        <GripIcon />
+      </span>
+      <button className="flex items-center gap-1 flex-1 min-w-0" onClick={() => toggleGroupCollapsed(group.id)}>
+        <span className="text-gray-500"><ChevronIcon collapsed={group.collapsed} /></span>
+        {editingGroupId === group.id ? (
+          <input
+            autoFocus
+            className="flex-1 bg-gray-700 text-white text-xs rounded px-1.5 py-0.5 outline-none"
+            value={editGroupName}
+            onChange={(e) => setEditGroupName(e.target.value)}
+            onBlur={() => saveGroupName(group.id)}
+            onKeyDown={(e) => { if (e.key === 'Enter') saveGroupName(group.id); if (e.key === 'Escape') setEditingGroupId(null) }}
+            onClick={(e) => e.stopPropagation()}
+          />
+        ) : (
+          <span className="text-xs font-semibold text-gray-400 uppercase tracking-wider truncate">{group.name}</span>
+        )}
+      </button>
+      <span className="flex gap-0.5 opacity-0 group-hover/grp:opacity-100">
+        <span className="p-0.5 rounded text-gray-500 hover:text-gray-300 hover:bg-gray-700 cursor-pointer" onPointerDown={(e) => e.stopPropagation()} onClick={(e) => { e.stopPropagation(); setEditingGroupId(group.id); setEditGroupName(group.name) }} title="Rename"><PencilIcon /></span>
+        <span className="p-0.5 rounded text-gray-500 hover:text-red-400 hover:bg-gray-700 cursor-pointer" onPointerDown={(e) => e.stopPropagation()} onClick={(e) => { e.stopPropagation(); if (confirm(`Delete group "${group.name}"? Projects will become ungrouped.`)) deleteGroup(group.id) }} title="Delete"><TrashIcon /></span>
+      </span>
+    </div>
+  )
+}
+
+// Lightweight previews shown in DragOverlay
 function ProjectDragPreview({ project }: { project: Project }) {
   return (
     <div className="flex items-center bg-gray-700 text-gray-200 text-xs rounded px-3 py-2 shadow-xl w-48 opacity-95">
       <span className="mr-1.5 text-gray-500"><GripIcon /></span>
       <span className="truncate">{project.name}</span>
+    </div>
+  )
+}
+
+function GroupDragPreview({ group }: { group: ProjectGroup }) {
+  return (
+    <div className="flex items-center bg-gray-800 text-gray-300 text-xs rounded px-3 py-2 shadow-xl w-48 opacity-95 border border-gray-600">
+      <span className="mr-1.5 text-gray-500"><GripIcon /></span>
+      <span className="truncate font-semibold uppercase tracking-wider">{group.name}</span>
     </div>
   )
 }
@@ -164,7 +228,7 @@ function GroupDropZone({ groupId, children, empty }: { groupId: string | null; c
 // ─── Sidebar ─────────────────────────────────────────────────────────────────
 
 export function Sidebar() {
-  const { groups, projects, activeProjectId, currentView, setCurrentView, addProject, addGroup, renameGroup, deleteGroup, toggleGroupCollapsed, moveProject } = useScrumStore()
+  const { groups, projects, activeProjectId, currentView, setCurrentView, addProject, addGroup, renameGroup, moveProject, reorderGroups } = useScrumStore()
 
   const [addingProject, setAddingProject] = useState<string | 'ungrouped' | null>(null)
   const [newProjectName, setNewProjectName] = useState('')
@@ -172,19 +236,45 @@ export function Sidebar() {
   const [newGroupName, setNewGroupName] = useState('')
   const [editingGroupId, setEditingGroupId] = useState<string | null>(null)
   const [editGroupName, setEditGroupName] = useState('')
-  const [draggedProjectId, setDraggedProjectId] = useState<string | null>(null)
+  const [draggedId, setDraggedId] = useState<string | null>(null)
+  const [dragType, setDragType] = useState<'project' | 'group' | null>(null)
 
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }))
 
-  const onDragStart = ({ active }: DragStartEvent) => setDraggedProjectId(active.id as string)
+  const saveGroupName = (id: string) => {
+    if (editGroupName.trim()) renameGroup(id, editGroupName.trim())
+    setEditingGroupId(null)
+  }
+
+  const onDragStart = ({ active }: DragStartEvent) => {
+    const type = active.data.current?.type
+    setDraggedId(active.id as string)
+    setDragType(type === 'group' ? 'group' : 'project')
+  }
 
   const onDragEnd = ({ active, over }: DragEndEvent) => {
-    setDraggedProjectId(null)
+    setDraggedId(null)
+    setDragType(null)
     if (!over) return
 
-    const projectId = active.id as string
+    const activeType = active.data.current?.type
     const overType = over.data.current?.type
 
+    if (activeType === 'group') {
+      if (overType === 'group') {
+        const sortedGroups = [...groups].sort((a, b) => a.order - b.order)
+        const ids = sortedGroups.map((g) => `group:${g.id}`)
+        const oldIndex = ids.indexOf(active.id as string)
+        const newIndex = ids.indexOf(over.id as string)
+        if (oldIndex !== -1 && newIndex !== -1 && oldIndex !== newIndex) {
+          reorderGroups(arrayMove(ids, oldIndex, newIndex).map((id) => id.replace('group:', '')))
+        }
+      }
+      return
+    }
+
+    // Project drag
+    const projectId = active.id as string
     if (overType === 'project') {
       const overProject = projects.find((p) => p.id === over.id)
       moveProject(projectId, overProject?.groupId ?? null, over.id as string)
@@ -201,14 +291,12 @@ export function Sidebar() {
     }
   }
 
-  const saveGroupName = (id: string) => {
-    if (editGroupName.trim()) renameGroup(id, editGroupName.trim())
-    setEditingGroupId(null)
-  }
-
   const sortedGroups = [...groups].sort((a, b) => a.order - b.order)
   const ungrouped = [...projects.filter((p) => !p.groupId)].sort((a, b) => a.order - b.order)
-  const draggedProject = draggedProjectId ? projects.find((p) => p.id === draggedProjectId) : null
+  const draggedProject = dragType === 'project' && draggedId ? projects.find((p) => p.id === draggedId) : null
+  const draggedGroup = dragType === 'group' && draggedId ? groups.find((g) => `group:${g.id}` === draggedId) : null
+
+  const groupHeaderProps = { editingGroupId, editGroupName, setEditingGroupId, setEditGroupName, saveGroupName }
 
   return (
     <aside className="w-56 flex-shrink-0 bg-gray-900 text-white flex flex-col h-full">
@@ -234,61 +322,44 @@ export function Sidebar() {
 
         <DndContext sensors={sensors} collisionDetection={closestCenter} onDragStart={onDragStart} onDragEnd={onDragEnd}>
 
-          {/* Named groups */}
-          {sortedGroups.map((group) => {
-            const groupProjects = [...projects.filter((p) => p.groupId === group.id)].sort((a, b) => a.order - b.order)
-            return (
-              <div key={group.id}>
-                <div className="group/grp flex items-center gap-1 px-2 py-1.5">
-                  <button className="flex items-center gap-1 flex-1 min-w-0" onClick={() => toggleGroupCollapsed(group.id)}>
-                    <span className="text-gray-500"><ChevronIcon collapsed={group.collapsed} /></span>
-                    {editingGroupId === group.id ? (
-                      <input
-                        autoFocus
-                        className="flex-1 bg-gray-700 text-white text-xs rounded px-1.5 py-0.5 outline-none"
-                        value={editGroupName}
-                        onChange={(e) => setEditGroupName(e.target.value)}
-                        onBlur={() => saveGroupName(group.id)}
-                        onKeyDown={(e) => { if (e.key === 'Enter') saveGroupName(group.id); if (e.key === 'Escape') setEditingGroupId(null) }}
-                        onClick={(e) => e.stopPropagation()}
-                      />
-                    ) : (
-                      <span className="text-xs font-semibold text-gray-400 uppercase tracking-wider truncate">{group.name}</span>
-                    )}
-                    <span className="text-xs text-gray-600 ml-auto">{groupProjects.length}</span>
-                  </button>
-                  <span className="flex gap-0.5 opacity-0 group-hover/grp:opacity-100">
-                    <span className="p-0.5 rounded text-gray-500 hover:text-gray-300 hover:bg-gray-700 cursor-pointer" onClick={() => { setEditingGroupId(group.id); setEditGroupName(group.name) }} title="Rename"><PencilIcon /></span>
-                    <span className="p-0.5 rounded text-gray-500 hover:text-red-400 hover:bg-gray-700 cursor-pointer" onClick={() => { if (confirm(`Delete group "${group.name}"? Projects will become ungrouped.`)) deleteGroup(group.id) }} title="Delete"><TrashIcon /></span>
-                  </span>
-                </div>
+          {/* Named groups — sortable */}
+          <SortableContext items={sortedGroups.map((g) => `group:${g.id}`)} strategy={verticalListSortingStrategy}>
+            {sortedGroups.map((group) => {
+              const groupProjects = [...projects.filter((p) => p.groupId === group.id)].sort((a, b) => a.order - b.order)
+              return (
+                <div key={group.id}>
+                  <SortableGroupHeader
+                    group={group}
+                    {...groupHeaderProps}
+                  />
 
-                {!group.collapsed && (
-                  <SortableContext items={groupProjects.map((p) => p.id)} strategy={verticalListSortingStrategy}>
-                    <GroupDropZone groupId={group.id} empty={groupProjects.length === 0}>
-                      {groupProjects.map((p) => (
-                        <SortableProjectRow key={p.id} project={p} isActive={activeProjectId === p.id} />
-                      ))}
-                    </GroupDropZone>
-                  </SortableContext>
-                )}
+                  {!group.collapsed && (
+                    <SortableContext items={groupProjects.map((p) => p.id)} strategy={verticalListSortingStrategy}>
+                      <GroupDropZone groupId={group.id} empty={groupProjects.length === 0}>
+                        {groupProjects.map((p) => (
+                          <SortableProjectRow key={p.id} project={p} isActive={activeProjectId === p.id} />
+                        ))}
+                      </GroupDropZone>
+                    </SortableContext>
+                  )}
 
-                {!group.collapsed && (
-                  addingProject === group.id ? (
-                    <div className="flex flex-col gap-1 pl-5 pr-2 py-1">
-                      <input autoFocus className="w-full bg-gray-700 text-white text-xs rounded px-2 py-1.5 outline-none placeholder-gray-500" value={newProjectName} onChange={(e) => setNewProjectName(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') submitProject(group.id); if (e.key === 'Escape') setAddingProject(null) }} placeholder="Project name" />
-                      <div className="flex gap-1">
-                        <button className="text-xs px-2 py-0.5 rounded text-gray-400 hover:bg-gray-700" onClick={() => setAddingProject(null)}>Cancel</button>
-                        <button className="text-xs px-2 py-0.5 rounded bg-indigo-600 text-white hover:bg-indigo-500" onClick={() => submitProject(group.id)}>Add</button>
+                  {!group.collapsed && (
+                    addingProject === group.id ? (
+                      <div className="flex flex-col gap-1 pl-5 pr-2 py-1">
+                        <input autoFocus className="w-full bg-gray-700 text-white text-xs rounded px-2 py-1.5 outline-none placeholder-gray-500" value={newProjectName} onChange={(e) => setNewProjectName(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') submitProject(group.id); if (e.key === 'Escape') setAddingProject(null) }} placeholder="Project name" />
+                        <div className="flex gap-1">
+                          <button className="text-xs px-2 py-0.5 rounded text-gray-400 hover:bg-gray-700" onClick={() => setAddingProject(null)}>Cancel</button>
+                          <button className="text-xs px-2 py-0.5 rounded bg-indigo-600 text-white hover:bg-indigo-500" onClick={() => submitProject(group.id)}>Add</button>
+                        </div>
                       </div>
-                    </div>
-                  ) : (
-                    <button className="text-xs text-gray-600 hover:text-gray-400 pl-6 pr-2 py-1 text-left hover:bg-gray-800 rounded w-full" onClick={() => { setAddingProject(group.id); setNewProjectName('') }}>+ Add project</button>
-                  )
-                )}
-              </div>
-            )
-          })}
+                    ) : (
+                      <button className="text-xs text-gray-600 hover:text-gray-400 pl-7 pr-2 py-1 text-left hover:bg-gray-800 rounded w-full" onClick={() => { setAddingProject(group.id); setNewProjectName('') }}>+ Add project</button>
+                    )
+                  )}
+                </div>
+              )
+            })}
+          </SortableContext>
 
           {/* Ungrouped */}
           {(ungrouped.length > 0 || groups.length === 0) && (
@@ -310,6 +381,7 @@ export function Sidebar() {
 
           <DragOverlay dropAnimation={null}>
             {draggedProject && <ProjectDragPreview project={draggedProject} />}
+            {draggedGroup && <GroupDragPreview group={draggedGroup} />}
           </DragOverlay>
         </DndContext>
 

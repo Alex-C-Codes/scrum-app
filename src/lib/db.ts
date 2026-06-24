@@ -1,11 +1,12 @@
 import { supabase } from './supabase'
-import type { Task, Column, Project, ProjectGroup, DailyTask } from '../types'
+import type { Task, Column, Project, ProjectGroup, DailyTask, Member } from '../types'
 
 // Map DB snake_case rows → TS camelCase types
 const toGroup     = (r: Record<string, unknown>): ProjectGroup => ({ id: r.id as string, name: r.name as string, order: r.order as number, collapsed: r.collapsed as boolean })
 const toProject   = (r: Record<string, unknown>): Project      => ({ id: r.id as string, name: r.name as string, groupId: r.group_id as string | null, order: r.order as number, createdAt: new Date(r.created_at as string).getTime() })
 const toColumn    = (r: Record<string, unknown>): Column       => ({ id: r.id as string, title: r.title as string, projectId: r.project_id as string, order: r.order as number })
-const toTask      = (r: Record<string, unknown>): Task         => ({ id: r.id as string, title: r.title as string, description: r.description as string, color: r.color as string, columnId: r.column_id as string, projectId: r.project_id as string, order: r.order as number, createdAt: new Date(r.created_at as string).getTime() })
+const toMember    = (r: Record<string, unknown>): Member       => ({ id: r.id as string, name: r.name as string, color: r.color as string })
+const toTask      = (r: Record<string, unknown>): Task         => ({ id: r.id as string, title: r.title as string, description: r.description as string, color: r.color as string, columnId: r.column_id as string, projectId: r.project_id as string, order: r.order as number, createdAt: new Date(r.created_at as string).getTime(), assigneeId: (r.assignee_id as string | null) ?? null })
 const toDailyTask = (r: Record<string, unknown>): DailyTask    => ({ id: r.id as string, taskId: r.task_id as string, date: r.date as string, order: r.order as number, completed: (r.completed as boolean) ?? false })
 
 const fire = (p: PromiseLike<{ error: unknown }>) =>
@@ -19,8 +20,9 @@ export const db = {
       supabase.from('board_columns').select('*'),
       supabase.from('tasks').select('*'),
       supabase.from('daily_tasks').select('*'),
+      supabase.from('members').select('*'),
     ])
-    const [g, p, c, t, dt] = settled.map((r) => {
+    const [g, p, c, t, dt, m] = settled.map((r) => {
       if (r.status === 'rejected') { console.error('DB query failed:', r.reason); return { data: null } }
       if (r.value.error) console.error('DB query error:', r.value.error.message)
       return r.value
@@ -31,13 +33,15 @@ export const db = {
       columns:    (c.data  ?? []).map(toColumn),
       tasks:      (t.data  ?? []).map(toTask),
       dailyTasks: (dt.data ?? []).map(toDailyTask),
+      members:    (m.data  ?? []).map(toMember),
     }
   },
 
   groups: {
-    insert: (g: ProjectGroup) => fire(supabase.from('project_groups').insert({ id: g.id, name: g.name, order: g.order, collapsed: g.collapsed })),
-    update: (id: string, data: object)  => fire(supabase.from('project_groups').update(data).eq('id', id)),
-    delete: (id: string)               => fire(supabase.from('project_groups').delete().eq('id', id)),
+    insert:     (g: ProjectGroup)   => fire(supabase.from('project_groups').insert({ id: g.id, name: g.name, order: g.order, collapsed: g.collapsed })),
+    update:     (id: string, data: object) => fire(supabase.from('project_groups').update(data).eq('id', id)),
+    upsertMany: (gs: ProjectGroup[]) => fire(supabase.from('project_groups').upsert(gs.map((g) => ({ id: g.id, name: g.name, order: g.order, collapsed: g.collapsed })))),
+    delete:     (id: string)        => fire(supabase.from('project_groups').delete().eq('id', id)),
   },
 
   projects: {
@@ -54,10 +58,15 @@ export const db = {
   },
 
   tasks: {
-    insert:     (t: Task)      => fire(supabase.from('tasks').insert({ id: t.id, title: t.title, description: t.description, color: t.color, column_id: t.columnId, project_id: t.projectId, order: t.order })),
+    insert:     (t: Task)      => fire(supabase.from('tasks').insert({ id: t.id, title: t.title, description: t.description, color: t.color, column_id: t.columnId, project_id: t.projectId, order: t.order, assignee_id: t.assigneeId })),
     update:     (id: string, data: object) => fire(supabase.from('tasks').update(data).eq('id', id)),
-    upsertMany: (ts: Task[])   => fire(supabase.from('tasks').upsert(ts.map((t) => ({ id: t.id, title: t.title, description: t.description, color: t.color, column_id: t.columnId, project_id: t.projectId, order: t.order })))),
+    upsertMany: (ts: Task[])   => fire(supabase.from('tasks').upsert(ts.map((t) => ({ id: t.id, title: t.title, description: t.description, color: t.color, column_id: t.columnId, project_id: t.projectId, order: t.order, assignee_id: t.assigneeId })))),
     delete:     (id: string)   => fire(supabase.from('tasks').delete().eq('id', id)),
+  },
+
+  members: {
+    insert: (m: Member) => fire(supabase.from('members').insert({ id: m.id, name: m.name, color: m.color })),
+    delete: (id: string) => fire(supabase.from('members').delete().eq('id', id)),
   },
 
   dailyTasks: {

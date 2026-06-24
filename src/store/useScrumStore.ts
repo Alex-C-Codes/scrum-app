@@ -1,7 +1,8 @@
 import { create } from 'zustand'
 import { v4 as uuid } from 'uuid'
 import { db } from '../lib/db'
-import type { Task, Column, Project, ProjectGroup, DailyTask, AppView } from '../types'
+import type { Task, Column, Project, ProjectGroup, DailyTask, AppView, Member } from '../types'
+import { MEMBER_COLORS } from '../types'
 
 interface ScrumState {
   groups: ProjectGroup[]
@@ -9,6 +10,7 @@ interface ScrumState {
   columns: Column[]
   tasks: Task[]
   dailyTasks: DailyTask[]
+  members: Member[]
   activeProjectId: string | null
   currentView: AppView
   isLoading: boolean
@@ -28,6 +30,7 @@ interface ScrumState {
   renameGroup: (id: string, name: string) => void
   deleteGroup: (id: string) => void
   toggleGroupCollapsed: (id: string) => void
+  reorderGroups: (orderedIds: string[]) => void
 
   // Projects
   addProject: (name: string, groupId?: string | null) => void
@@ -43,9 +46,13 @@ interface ScrumState {
   deleteColumn: (id: string) => void
   reorderColumns: (projectId: string, orderedIds: string[]) => void
 
+  // Members
+  addMember: (name: string) => string
+  deleteMember: (id: string) => void
+
   // Tasks
   addTask: (columnId: string, projectId: string, title: string, description: string, color: string) => void
-  updateTask: (id: string, updates: Partial<Pick<Task, 'title' | 'description' | 'color'>>) => void
+  updateTask: (id: string, updates: Partial<Pick<Task, 'title' | 'description' | 'color' | 'assigneeId'>>) => void
   deleteTask: (id: string) => void
   moveTask: (taskId: string, targetColumnId: string, newOrder: number) => void
   reorderTasks: (columnId: string, orderedIds: string[]) => void
@@ -59,6 +66,7 @@ export const useScrumStore = create<ScrumState>()((set, get) => ({
   columns: [],
   tasks: [],
   dailyTasks: [],
+  members: [],
   activeProjectId: null,
   currentView: 'board',
   isLoading: true,
@@ -69,6 +77,9 @@ export const useScrumStore = create<ScrumState>()((set, get) => ({
     try {
       const data = await db.loadAll()
       set({ ...data, isLoading: false })
+      if (!get().activeProjectId && data.projects.length > 0) {
+        set({ activeProjectId: data.projects[0].id })
+      }
     } catch (err) {
       set({ isLoading: false, loadError: String(err) })
     }
@@ -111,11 +122,46 @@ export const useScrumStore = create<ScrumState>()((set, get) => ({
   },
 
   toggleDailyTaskComplete: (id) => {
-    const dt = get().dailyTasks.find((d) => d.id === id)
+    const s = get()
+    const dt = s.dailyTasks.find((d) => d.id === id)
     if (!dt) return
-    const updated = { ...dt, completed: !dt.completed }
-    set((s) => ({ dailyTasks: s.dailyTasks.map((d) => d.id === id ? updated : d) }))
+    const nowComplete = !dt.completed
+    const updated = { ...dt, completed: nowComplete }
+    set((st) => ({ dailyTasks: st.dailyTasks.map((d) => d.id === id ? updated : d) }))
     db.dailyTasks.upsertMany([updated])
+
+    if (nowComplete) {
+      const task = s.tasks.find((t) => t.id === dt.taskId)
+      if (task) {
+        const doneCol = s.columns.find(
+          (c) => c.projectId === task.projectId && c.title.toLowerCase() === 'done'
+        )
+        if (doneCol && task.columnId !== doneCol.id) {
+          const insertAt = s.tasks.filter((t) => t.columnId === doneCol.id).length
+          get().moveTask(task.id, doneCol.id, insertAt)
+        }
+      }
+    }
+  },
+
+  // ── Members ───────────────────────────────────────────────────────────────
+
+  addMember: (name) => {
+    const s = get()
+    const usedColors = new Set(s.members.map((m) => m.color))
+    const color = MEMBER_COLORS.find((c) => !usedColors.has(c)) ?? MEMBER_COLORS[s.members.length % MEMBER_COLORS.length]
+    const member: Member = { id: uuid(), name: name.trim(), color }
+    set((st) => ({ members: [...st.members, member] }))
+    db.members.insert(member)
+    return member.id
+  },
+
+  deleteMember: (id) => {
+    set((s) => ({
+      members: s.members.filter((m) => m.id !== id),
+      tasks: s.tasks.map((t) => t.assigneeId === id ? { ...t, assigneeId: null } : t),
+    }))
+    db.members.delete(id)
   },
 
   // ── Groups ────────────────────────────────────────────────────────────────
@@ -145,6 +191,12 @@ export const useScrumStore = create<ScrumState>()((set, get) => ({
     const collapsed = !group.collapsed
     set((s) => ({ groups: s.groups.map((g) => (g.id === id ? { ...g, collapsed } : g)) }))
     db.groups.update(id, { collapsed })
+  },
+
+  reorderGroups: (orderedIds) => {
+    const reordered = get().groups.map((g) => ({ ...g, order: orderedIds.indexOf(g.id) }))
+    set({ groups: reordered })
+    db.groups.upsertMany(reordered)
   },
 
   // ── Projects ──────────────────────────────────────────────────────────────
@@ -244,14 +296,16 @@ export const useScrumStore = create<ScrumState>()((set, get) => ({
 
   addTask: (columnId, projectId, title, description, color) => {
     const order = get().tasks.filter((t) => t.columnId === columnId).length
-    const task: Task = { id: uuid(), title, description, color, columnId, projectId, order, createdAt: Date.now() }
+    const task: Task = { id: uuid(), title, description, color, columnId, projectId, order, createdAt: Date.now(), assigneeId: null }
     set((s) => ({ tasks: [...s.tasks, task] }))
     db.tasks.insert(task)
   },
 
   updateTask: (id, updates) => {
     set((s) => ({ tasks: s.tasks.map((t) => (t.id === id ? { ...t, ...updates } : t)) }))
-    db.tasks.update(id, updates)
+    const { assigneeId, ...rest } = updates as { assigneeId?: string | null; [k: string]: unknown }
+    const dbUpdates = { ...rest, ...(assigneeId !== undefined ? { assignee_id: assigneeId } : {}) }
+    db.tasks.update(id, dbUpdates)
   },
 
   deleteTask: (id) => {

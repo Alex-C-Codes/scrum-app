@@ -1,3 +1,9 @@
+export interface Member {
+  id: string
+  name: string
+  color: string
+}
+
 export interface Task {
   id: string
   title: string
@@ -7,7 +13,13 @@ export interface Task {
   projectId: string
   order: number
   createdAt: number
+  assigneeId: string | null
 }
+
+export const MEMBER_COLORS = [
+  '#6366f1', '#0ea5e9', '#10b981', '#f59e0b',
+  '#ef4444', '#8b5cf6', '#ec4899', '#14b8a6',
+]
 
 export interface Column {
   id: string
