@@ -19,7 +19,16 @@ export interface Column {
 export interface Project {
   id: string
   name: string
+  groupId: string | null
+  order: number
   createdAt: number
+}
+
+export interface ProjectGroup {
+  id: string
+  name: string
+  order: number
+  collapsed: boolean
 }
 
 export const TASK_COLORS = [
