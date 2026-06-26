@@ -7,7 +7,8 @@ import {
 import { SortableContext, useSortable, verticalListSortingStrategy, arrayMove } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
 import { useScrumStore } from '../store/useScrumStore'
-import type { DailyTask, Task } from '../types'
+import type { DailyTask, Habit, HabitCompletion, Task } from '../types'
+import { isHabitScheduledOn } from '../types'
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -163,11 +164,93 @@ function PickerTask({ task, alreadyAdded }: { task: Task; alreadyAdded: boolean 
   )
 }
 
+// ─── Habit helpers ────────────────────────────────────────────────────────────
+
+function countScheduledBetween(habit: Habit, start: string, end: string): number {
+  let count = 0
+  const d = new Date(start + 'T00:00:00')
+  const e = new Date(end + 'T00:00:00')
+  while (d <= e) {
+    if (isHabitScheduledOn(habit.recurrence, d.toLocaleDateString('en-CA'))) count++
+    d.setDate(d.getDate() + 1)
+  }
+  return count
+}
+
+function getHabitStats(habit: Habit, completions: HabitCompletion[], today: string) {
+  const t = new Date(today + 'T00:00:00')
+  const dow = t.getDay()
+  const monday = new Date(t)
+  monday.setDate(t.getDate() - (dow === 0 ? 6 : dow - 1))
+  const weekStart  = monday.toLocaleDateString('en-CA')
+  const monthStart = today.slice(0, 7) + '-01'
+
+  const hc = completions.filter((c) => c.habitId === habit.id)
+  const weekDone   = hc.filter((c) => c.date >= weekStart  && c.date <= today).length
+  const monthDone  = hc.filter((c) => c.date >= monthStart && c.date <= today).length
+  const weekSched  = countScheduledBetween(habit, weekStart,  today)
+  const monthSched = countScheduledBetween(habit, monthStart, today)
+
+  const dots = Array.from({ length: 7 }, (_, i) => {
+    const d = new Date(t)
+    d.setDate(t.getDate() - (6 - i))
+    const ds = d.toLocaleDateString('en-CA')
+    return {
+      date: ds,
+      scheduled: isHabitScheduledOn(habit.recurrence, ds),
+      done: hc.some((c) => c.date === ds),
+    }
+  })
+
+  return { weekDone, weekSched, monthDone, monthSched, dots }
+}
+
+function HabitRow({ habit, today, completions }: { habit: Habit; today: string; completions: HabitCompletion[] }) {
+  const { toggleHabitCompletion, projects } = useScrumStore()
+  const isDone = completions.some((c) => c.habitId === habit.id && c.date === today)
+  const project = projects.find((p) => p.id === habit.projectId)
+  const { weekDone, weekSched, monthDone, monthSched, dots } = getHabitStats(habit, completions, today)
+
+  return (
+    <div className={`flex items-center gap-3 rounded-lg px-3 py-2.5 border transition-colors ${isDone ? 'bg-gray-50 border-gray-200' : 'bg-white border-gray-200 hover:border-gray-300'}`}>
+      <button
+        onClick={() => toggleHabitCompletion(habit.id, today)}
+        className={`w-5 h-5 rounded-full border-2 flex items-center justify-center flex-shrink-0 transition-colors ${
+          isDone ? 'border-green-400 bg-green-400 text-white' : 'border-gray-300 hover:border-green-400'
+        }`}
+      >
+        {isDone && <span className="text-xs font-bold">✓</span>}
+      </button>
+      <div className="flex-1 min-w-0">
+        <p className={`text-sm font-medium truncate ${isDone ? 'text-gray-400 line-through' : 'text-gray-800'}`}>{habit.title}</p>
+        <p className="text-xs text-gray-400">{project?.name}</p>
+      </div>
+      {/* Last 7 days dots — only show scheduled days */}
+      <div className="flex gap-0.5 flex-shrink-0 items-center">
+        {dots.map((d, i) => (
+          d.scheduled
+            ? <div key={i} className="w-2.5 h-2.5 rounded-full border" title={d.date}
+                style={{ backgroundColor: d.done ? habit.color : 'transparent', borderColor: d.done ? habit.color : '#d1d5db' }} />
+            : <div key={i} className="w-2.5 h-2.5" />
+        ))}
+      </div>
+      {/* Stats */}
+      {weekSched > 0 && (
+        <div className="flex-shrink-0 text-right">
+          <p className="text-xs text-gray-500 font-medium">{weekDone}/{weekSched} <span className="text-gray-400 font-normal">wk</span></p>
+          <p className="text-xs text-gray-500 font-medium">{monthDone}/{monthSched} <span className="text-gray-400 font-normal">mo</span></p>
+        </div>
+      )}
+    </div>
+  )
+}
+
 // ─── DailyView ────────────────────────────────────────────────────────────────
 
 export function DailyView() {
-  const { projects, columns, tasks, dailyTasks, addToDaily, reorderDailyTasks, toggleDailyTaskComplete } = useScrumStore()
-  const [date, setDate] = useState(toDateStr(new Date()))
+  const { projects, columns, tasks, dailyTasks, habits, habitCompletions, dailyViewDate, setDailyViewDate, addToDaily, reorderDailyTasks, toggleDailyTaskComplete } = useScrumStore()
+  const date = dailyViewDate
+  const setDate = setDailyViewDate
   const [search, setSearch] = useState('')
   const [activeDrag, setActiveDrag] = useState<{ type: string; id: string } | null>(null)
 
@@ -178,7 +261,11 @@ export function DailyView() {
   const completedEntries = allDayEntries.filter((dt) => dt.completed).sort((a, b) => a.order - b.order)
   const assignedTaskIds = new Set(allDayEntries.map((dt) => dt.taskId))
 
-  const pickerTasks = tasks.filter((t) => !search || t.title.toLowerCase().includes(search.toLowerCase()))
+  const doneColumnIds = new Set(columns.filter((c) => c.title.toLowerCase() === 'done').map((c) => c.id))
+  const pickerTasks = tasks.filter((t) =>
+    !doneColumnIds.has(t.columnId) &&
+    (!search || t.title.toLowerCase().includes(search.toLowerCase()))
+  )
   const projectsWithTasks = projects
     .map((p) => ({ project: p, tasks: pickerTasks.filter((t) => t.projectId === p.id) }))
     .filter((g) => g.tasks.length > 0)
@@ -287,6 +374,26 @@ export function DailyView() {
                 })}
               </div>
             )}
+
+            {/* Habits section — only habits scheduled for this date */}
+            {(() => {
+              const todayHabits = habits.filter((h) => isHabitScheduledOn(h.recurrence, date))
+              if (!todayHabits.length) return null
+              return (
+                <div className="flex flex-col gap-2">
+                  <div className="flex items-center justify-between">
+                    <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Habits</h3>
+                    <div className="flex gap-3 text-xs text-gray-400 pr-1">
+                      <span>last 7d</span>
+                      <span className="w-14 text-right">stats</span>
+                    </div>
+                  </div>
+                  {todayHabits.map((habit) => (
+                    <HabitRow key={habit.id} habit={habit} today={date} completions={habitCompletions} />
+                  ))}
+                </div>
+              )
+            })()}
           </div>
 
           {/* Divider */}

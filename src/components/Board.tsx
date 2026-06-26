@@ -13,6 +13,7 @@ import { arrayMove } from '@dnd-kit/sortable'
 import { useScrumStore } from '../store/useScrumStore'
 import { Column } from './Column'
 import { TaskCard } from './TaskCard'
+import { HabitsPanel } from './HabitsPanel'
 import type { Task } from '../types'
 
 export function Board() {
@@ -86,15 +87,16 @@ export function Board() {
         <span className="text-sm text-gray-500">{projectColumns.length} columns · {tasks.filter((t) => t.projectId === activeProjectId).length} tasks</span>
       </div>
 
-      {/* Columns */}
-      <div className="flex-1 overflow-x-auto p-6">
+      {/* Columns + Habits scrollable area */}
+      <div className="flex-1 overflow-y-auto flex flex-col">
+        <div className="overflow-x-auto p-6 flex-shrink-0">
         <DndContext
           sensors={sensors}
           collisionDetection={closestCorners}
           onDragStart={onDragStart}
           onDragEnd={onDragEnd}
         >
-          <div className="flex gap-4 items-start h-full">
+          <div className="flex gap-4 items-start">
             {projectColumns.map((col) => (
               <Column
                 key={col.id}
@@ -157,6 +159,8 @@ export function Board() {
             )}
           </DragOverlay>
         </DndContext>
+        </div>
+        <HabitsPanel projectId={activeProjectId!} />
       </div>
     </div>
   )

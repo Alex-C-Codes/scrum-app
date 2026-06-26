@@ -2,6 +2,7 @@ import { useEffect } from 'react'
 import { Sidebar } from './components/Sidebar'
 import { Board } from './components/Board'
 import { DailyView } from './components/DailyView'
+import { CalendarView } from './components/CalendarView'
 import { useScrumStore } from './store/useScrumStore'
 
 export default function App() {
@@ -50,6 +51,8 @@ export default function App() {
       <main className="flex-1 flex flex-col overflow-hidden">
         {currentView === 'daily' ? (
           <DailyView />
+        ) : currentView === 'calendar' ? (
+          <CalendarView />
         ) : activeProjectId ? (
           <Board />
         ) : (

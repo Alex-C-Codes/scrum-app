@@ -1,11 +1,13 @@
 import { supabase } from './supabase'
-import type { Task, Column, Project, ProjectGroup, DailyTask, Member } from '../types'
+import type { Task, Column, Project, ProjectGroup, DailyTask, Member, Habit, HabitCompletion, RecurrenceRule } from '../types'
 
 // Map DB snake_case rows → TS camelCase types
 const toGroup     = (r: Record<string, unknown>): ProjectGroup => ({ id: r.id as string, name: r.name as string, order: r.order as number, collapsed: r.collapsed as boolean })
 const toProject   = (r: Record<string, unknown>): Project      => ({ id: r.id as string, name: r.name as string, groupId: r.group_id as string | null, order: r.order as number, createdAt: new Date(r.created_at as string).getTime() })
 const toColumn    = (r: Record<string, unknown>): Column       => ({ id: r.id as string, title: r.title as string, projectId: r.project_id as string, order: r.order as number })
-const toMember    = (r: Record<string, unknown>): Member       => ({ id: r.id as string, name: r.name as string, color: r.color as string })
+const toMember          = (r: Record<string, unknown>): Member          => ({ id: r.id as string, name: r.name as string, color: r.color as string })
+const toHabit           = (r: Record<string, unknown>): Habit           => ({ id: r.id as string, title: r.title as string, projectId: r.project_id as string, color: r.color as string, recurrence: (r.recurrence as RecurrenceRule) ?? { type: 'daily' }, createdAt: new Date(r.created_at as string).getTime() })
+const toHabitCompletion = (r: Record<string, unknown>): HabitCompletion => ({ id: r.id as string, habitId: r.habit_id as string, date: r.date as string })
 const toTask      = (r: Record<string, unknown>): Task         => ({ id: r.id as string, title: r.title as string, description: r.description as string, color: r.color as string, columnId: r.column_id as string, projectId: r.project_id as string, order: r.order as number, createdAt: new Date(r.created_at as string).getTime(), assigneeId: (r.assignee_id as string | null) ?? null })
 const toDailyTask = (r: Record<string, unknown>): DailyTask    => ({ id: r.id as string, taskId: r.task_id as string, date: r.date as string, order: r.order as number, completed: (r.completed as boolean) ?? false })
 
@@ -21,19 +23,23 @@ export const db = {
       supabase.from('tasks').select('*'),
       supabase.from('daily_tasks').select('*'),
       supabase.from('members').select('*'),
+      supabase.from('habits').select('*'),
+      supabase.from('habit_completions').select('*'),
     ])
-    const [g, p, c, t, dt, m] = settled.map((r) => {
+    const [g, p, c, t, dt, m, h, hc] = settled.map((r) => {
       if (r.status === 'rejected') { console.error('DB query failed:', r.reason); return { data: null } }
       if (r.value.error) console.error('DB query error:', r.value.error.message)
       return r.value
     })
     return {
-      groups:     (g.data  ?? []).map(toGroup),
-      projects:   (p.data  ?? []).map(toProject),
-      columns:    (c.data  ?? []).map(toColumn),
-      tasks:      (t.data  ?? []).map(toTask),
-      dailyTasks: (dt.data ?? []).map(toDailyTask),
-      members:    (m.data  ?? []).map(toMember),
+      groups:           (g.data  ?? []).map(toGroup),
+      projects:         (p.data  ?? []).map(toProject),
+      columns:          (c.data  ?? []).map(toColumn),
+      tasks:            (t.data  ?? []).map(toTask),
+      dailyTasks:       (dt.data ?? []).map(toDailyTask),
+      members:          (m.data  ?? []).map(toMember),
+      habits:           (h.data  ?? []).map(toHabit),
+      habitCompletions: (hc.data ?? []).map(toHabitCompletion),
     }
   },
 
@@ -67,6 +73,17 @@ export const db = {
   members: {
     insert: (m: Member) => fire(supabase.from('members').insert({ id: m.id, name: m.name, color: m.color })),
     delete: (id: string) => fire(supabase.from('members').delete().eq('id', id)),
+  },
+
+  habits: {
+    insert: (h: Habit)           => fire(supabase.from('habits').insert({ id: h.id, title: h.title, color: h.color, project_id: h.projectId, recurrence: h.recurrence })),
+    update: (id: string, data: object) => fire(supabase.from('habits').update(data).eq('id', id)),
+    delete: (id: string)         => fire(supabase.from('habits').delete().eq('id', id)),
+  },
+
+  habitCompletions: {
+    insert: (c: HabitCompletion) => fire(supabase.from('habit_completions').insert({ id: c.id, habit_id: c.habitId, date: c.date })),
+    delete: (id: string)         => fire(supabase.from('habit_completions').delete().eq('id', id)),
   },
 
   dailyTasks: {

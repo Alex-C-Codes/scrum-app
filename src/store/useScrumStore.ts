@@ -1,7 +1,7 @@
 import { create } from 'zustand'
 import { v4 as uuid } from 'uuid'
 import { db } from '../lib/db'
-import type { Task, Column, Project, ProjectGroup, DailyTask, AppView, Member } from '../types'
+import type { Task, Column, Project, ProjectGroup, DailyTask, AppView, Member, Habit, HabitCompletion } from '../types'
 import { MEMBER_COLORS } from '../types'
 
 interface ScrumState {
@@ -11,19 +11,24 @@ interface ScrumState {
   tasks: Task[]
   dailyTasks: DailyTask[]
   members: Member[]
+  habits: Habit[]
+  habitCompletions: HabitCompletion[]
   activeProjectId: string | null
   currentView: AppView
+  dailyViewDate: string
   isLoading: boolean
   loadError: string | null
 
   loadData: () => Promise<void>
   setCurrentView: (view: AppView) => void
+  setDailyViewDate: (date: string) => void
 
   // Daily tasks
   addToDaily: (taskId: string, date: string, insertAt?: number) => void
   removeFromDaily: (id: string) => void
   reorderDailyTasks: (date: string, orderedIds: string[]) => void
   toggleDailyTaskComplete: (id: string) => void
+  rolloverDailyTasks: () => void
 
   // Groups
   addGroup: (name: string) => void
@@ -50,6 +55,12 @@ interface ScrumState {
   addMember: (name: string) => string
   deleteMember: (id: string) => void
 
+  // Habits
+  addHabit: (title: string, projectId: string, color: string, recurrence: Habit['recurrence']) => void
+  updateHabit: (id: string, updates: Partial<Pick<Habit, 'title' | 'color' | 'recurrence'>>) => void
+  deleteHabit: (id: string) => void
+  toggleHabitCompletion: (habitId: string, date: string) => void
+
   // Tasks
   addTask: (columnId: string, projectId: string, title: string, description: string, color: string) => void
   updateTask: (id: string, updates: Partial<Pick<Task, 'title' | 'description' | 'color' | 'assigneeId'>>) => void
@@ -67,8 +78,11 @@ export const useScrumStore = create<ScrumState>()((set, get) => ({
   tasks: [],
   dailyTasks: [],
   members: [],
+  habits: [],
+  habitCompletions: [],
   activeProjectId: null,
   currentView: 'board',
+  dailyViewDate: new Date().toLocaleDateString('en-CA'),
   isLoading: true,
   loadError: null,
 
@@ -80,12 +94,14 @@ export const useScrumStore = create<ScrumState>()((set, get) => ({
       if (!get().activeProjectId && data.projects.length > 0) {
         set({ activeProjectId: data.projects[0].id })
       }
+      get().rolloverDailyTasks()
     } catch (err) {
       set({ isLoading: false, loadError: String(err) })
     }
   },
 
   setCurrentView: (view) => set({ currentView: view }),
+  setDailyViewDate: (date) => set({ dailyViewDate: date }),
 
   // ── Daily tasks ───────────────────────────────────────────────────────────
 
@@ -162,6 +178,73 @@ export const useScrumStore = create<ScrumState>()((set, get) => ({
       tasks: s.tasks.map((t) => t.assigneeId === id ? { ...t, assigneeId: null } : t),
     }))
     db.members.delete(id)
+  },
+
+  rolloverDailyTasks: () => {
+    const s = get()
+    const today = new Date().toLocaleDateString('en-CA')
+
+    // Find the most recent past day that has pending (non-completed) entries
+    const pastDaysWithPending = [...new Set(
+      s.dailyTasks.filter((dt) => dt.date < today && !dt.completed).map((dt) => dt.date)
+    )].sort()
+    if (pastDaysWithPending.length === 0) return
+
+    const sourceDay = pastDaysWithPending[pastDaysWithPending.length - 1]
+
+    const pending = s.dailyTasks
+      .filter((dt) => dt.date === sourceDay && !dt.completed)
+      .sort((a, b) => a.order - b.order)
+
+    const todayIds = new Set(s.dailyTasks.filter((dt) => dt.date === today).map((dt) => dt.taskId))
+    const toAdd = pending.filter((dt) => !todayIds.has(dt.taskId))
+    if (toAdd.length === 0) return
+
+    const startOrder = s.dailyTasks.filter((dt) => dt.date === today).length
+    const newEntries: DailyTask[] = toAdd.map((dt, i) => ({
+      id: uuid(),
+      taskId: dt.taskId,
+      date: today,
+      order: startOrder + i,
+      completed: false,
+    }))
+
+    set((st) => ({ dailyTasks: [...st.dailyTasks, ...newEntries] }))
+    db.dailyTasks.upsertMany(newEntries)
+  },
+
+  // ── Habits ────────────────────────────────────────────────────────────────
+
+  addHabit: (title, projectId, color, recurrence) => {
+    const habit: Habit = { id: uuid(), title, projectId, color, recurrence, createdAt: Date.now() }
+    set((s) => ({ habits: [...s.habits, habit] }))
+    db.habits.insert(habit)
+  },
+
+  updateHabit: (id, updates) => {
+    set((s) => ({ habits: s.habits.map((h) => h.id === id ? { ...h, ...updates } : h) }))
+    db.habits.update(id, updates)
+  },
+
+  deleteHabit: (id) => {
+    set((s) => ({
+      habits: s.habits.filter((h) => h.id !== id),
+      habitCompletions: s.habitCompletions.filter((c) => c.habitId !== id),
+    }))
+    db.habits.delete(id)
+  },
+
+  toggleHabitCompletion: (habitId, date) => {
+    const s = get()
+    const existing = s.habitCompletions.find((c) => c.habitId === habitId && c.date === date)
+    if (existing) {
+      set((st) => ({ habitCompletions: st.habitCompletions.filter((c) => c.id !== existing.id) }))
+      db.habitCompletions.delete(existing.id)
+    } else {
+      const completion: HabitCompletion = { id: uuid(), habitId, date }
+      set((st) => ({ habitCompletions: [...st.habitCompletions, completion] }))
+      db.habitCompletions.insert(completion)
+    }
   },
 
   // ── Groups ────────────────────────────────────────────────────────────────

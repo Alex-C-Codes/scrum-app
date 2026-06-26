@@ -51,7 +51,60 @@ export interface DailyTask {
   completed: boolean
 }
 
-export type AppView = 'board' | 'daily'
+export type RecurrenceRule =
+  | { type: 'daily' }
+  | { type: 'weekly'; days: number[] }                          // 0=Sun … 6=Sat
+  | { type: 'monthly_date'; dayOfMonth: number }                // e.g. 15th of each month
+  | { type: 'monthly_weekday'; week: 1|2|3|4|5; day: number }  // e.g. first Friday
+
+export function isHabitScheduledOn(r: RecurrenceRule, dateStr: string): boolean {
+  const d = new Date(dateStr + 'T00:00:00')
+  switch (r.type) {
+    case 'daily': return true
+    case 'weekly': return r.days.length === 0 || r.days.includes(d.getDay())
+    case 'monthly_date': return d.getDate() === r.dayOfMonth
+    case 'monthly_weekday':
+      return d.getDay() === r.day && Math.ceil(d.getDate() / 7) === r.week
+  }
+}
+
+export function describeRecurrence(r: RecurrenceRule): string {
+  const dayNames  = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat']
+  const weekOrd   = ['','First','Second','Third','Fourth','Fifth']
+  const ord = (n: number) => {
+    if (n % 100 >= 11 && n % 100 <= 13) return n + 'th'
+    return n + (['th','st','nd','rd'][Math.min(n % 10, 3)] ?? 'th')
+  }
+  switch (r.type) {
+    case 'daily': return 'Every day'
+    case 'weekly': {
+      if (!r.days.length || r.days.length === 7) return 'Every day'
+      const s = [...r.days].sort()
+      if (JSON.stringify(s) === JSON.stringify([1,2,3,4,5])) return 'Weekdays (Mon–Fri)'
+      if (JSON.stringify(s) === JSON.stringify([0,6])) return 'Weekends'
+      return s.map(d => dayNames[d]).join(', ')
+    }
+    case 'monthly_date': return `${ord(r.dayOfMonth)} of each month`
+    case 'monthly_weekday': return `${weekOrd[r.week]} ${dayNames[r.day]} of each month`
+  }
+}
+
+export interface Habit {
+  id: string
+  title: string
+  projectId: string
+  color: string
+  recurrence: RecurrenceRule
+  createdAt: number
+}
+
+export interface HabitCompletion {
+  id: string
+  habitId: string
+  date: string // YYYY-MM-DD
+}
+
+export type AppView = 'board' | 'daily' | 'calendar'
 
 export const TASK_COLORS = [
   '#fef08a', // yellow
