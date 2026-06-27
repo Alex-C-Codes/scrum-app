@@ -1,7 +1,7 @@
 import { create } from 'zustand'
 import { v4 as uuid } from 'uuid'
 import { db } from '../lib/db'
-import type { Task, Column, Project, ProjectGroup, DailyTask, AppView, Member, Habit, HabitCompletion } from '../types'
+import type { Task, Column, Project, ProjectGroup, DailyTask, Member, Habit, HabitCompletion } from '../types'
 import { MEMBER_COLORS } from '../types'
 
 interface ScrumState {
@@ -14,13 +14,11 @@ interface ScrumState {
   habits: Habit[]
   habitCompletions: HabitCompletion[]
   activeProjectId: string | null
-  currentView: AppView
   dailyViewDate: string
   isLoading: boolean
   loadError: string | null
 
   loadData: () => Promise<void>
-  setCurrentView: (view: AppView) => void
   setDailyViewDate: (date: string) => void
 
   // Daily tasks
@@ -81,7 +79,6 @@ export const useScrumStore = create<ScrumState>()((set, get) => ({
   habits: [],
   habitCompletions: [],
   activeProjectId: null,
-  currentView: 'board',
   dailyViewDate: new Date().toLocaleDateString('en-CA'),
   isLoading: true,
   loadError: null,
@@ -100,7 +97,6 @@ export const useScrumStore = create<ScrumState>()((set, get) => ({
     }
   },
 
-  setCurrentView: (view) => set({ currentView: view }),
   setDailyViewDate: (date) => set({ dailyViewDate: date }),
 
   // ── Daily tasks ───────────────────────────────────────────────────────────

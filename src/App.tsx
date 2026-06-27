@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { Routes, Route, Navigate, useLocation } from 'react-router-dom'
 import { Sidebar } from './components/Sidebar'
 import { Board } from './components/Board'
 import { DailyView } from './components/DailyView'
@@ -13,9 +14,10 @@ function HamburgerIcon() {
   )
 }
 
-export default function App() {
-  const { isLoading, loadError, activeProjectId, currentView, projects, addProject, setActiveProject, loadData } = useScrumStore()
+function AppShell() {
+  const { isLoading, loadError, activeProjectId, projects, addProject, setActiveProject, loadData } = useScrumStore()
   const [sidebarOpen, setSidebarOpen] = useState(false)
+  const location = useLocation()
 
   useEffect(() => { loadData() }, [])
 
@@ -53,7 +55,8 @@ export default function App() {
   }
 
   const project = projects.find((p) => p.id === activeProjectId)
-  const viewTitle = currentView === 'daily' ? 'Daily Tasks' : currentView === 'calendar' ? 'Calendar' : project?.name ?? 'Board'
+  const path = location.pathname
+  const viewTitle = path === '/calendar' ? 'Calendar' : path === '/board' ? (project?.name ?? 'Board') : 'Daily Tasks'
 
   return (
     <div className="flex h-screen overflow-hidden bg-white">
@@ -80,19 +83,25 @@ export default function App() {
         </div>
 
         <main className="flex-1 flex flex-col overflow-hidden">
-          {currentView === 'daily' ? (
-            <DailyView />
-          ) : currentView === 'calendar' ? (
-            <CalendarView />
-          ) : activeProjectId ? (
-            <Board />
-          ) : (
-            <div className="flex-1 flex items-center justify-center text-gray-400 p-6 text-center">
-              <p>Select or create a project to get started</p>
-            </div>
-          )}
+          <Routes>
+            <Route path="/" element={<Navigate to="/daily" replace />} />
+            <Route path="/daily" element={<DailyView />} />
+            <Route path="/calendar" element={<CalendarView />} />
+            <Route path="/board" element={
+              activeProjectId
+                ? <Board />
+                : <div className="flex-1 flex items-center justify-center text-gray-400 p-6 text-center">
+                    <p>Select or create a project to get started</p>
+                  </div>
+            } />
+            <Route path="*" element={<Navigate to="/daily" replace />} />
+          </Routes>
         </main>
       </div>
     </div>
   )
+}
+
+export default function App() {
+  return <AppShell />
 }

@@ -1,12 +1,13 @@
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
+import { BrowserRouter } from 'react-router-dom'
 import './index.css'
 
 const root = createRoot(document.getElementById('root')!)
 
 try {
   const { default: App } = await import('./App.tsx')
-  root.render(<StrictMode><App /></StrictMode>)
+  root.render(<StrictMode><BrowserRouter><App /></BrowserRouter></StrictMode>)
 } catch (err) {
   root.render(
     <div style={{ display: 'flex', height: '100vh', alignItems: 'center', justifyContent: 'center', fontFamily: 'system-ui', background: '#f9fafb' }}>

@@ -104,8 +104,6 @@ export interface HabitCompletion {
   date: string // YYYY-MM-DD
 }
 
-export type AppView = 'board' | 'daily' | 'calendar'
-
 export const TASK_COLORS = [
   '#fef08a', // yellow
   '#bbf7d0', // green

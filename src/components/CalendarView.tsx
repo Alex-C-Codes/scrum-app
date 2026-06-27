@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { useScrumStore } from '../store/useScrumStore'
 import { isHabitScheduledOn } from '../types'
 import type { Habit, HabitCompletion, DailyTask } from '../types'
@@ -125,7 +126,8 @@ function Legend() {
 // ─── CalendarView ─────────────────────────────────────────────────────────────
 
 export function CalendarView() {
-  const { habits, habitCompletions, dailyTasks, setCurrentView, setDailyViewDate } = useScrumStore()
+  const { habits, habitCompletions, dailyTasks, setDailyViewDate } = useScrumStore()
+  const navigate = useNavigate()
 
   const now = new Date()
   const [year, setYear]   = useState(now.getFullYear())
@@ -139,7 +141,7 @@ export function CalendarView() {
 
   const goToDay = (ds: string) => {
     setDailyViewDate(ds)
-    setCurrentView('daily')
+    navigate('/daily')
   }
 
   // Month-level stats

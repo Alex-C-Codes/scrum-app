@@ -147,6 +147,43 @@ function CompletedItem({ dailyTask, task, projectName }: {
   )
 }
 
+// ─── Sortable project section ─────────────────────────────────────────────────
+
+function PickerGripIcon() {
+  return (
+    <svg width="10" height="14" viewBox="0 0 10 14" fill="currentColor">
+      <circle cx="3" cy="3" r="1.2"/><circle cx="7" cy="3" r="1.2"/>
+      <circle cx="3" cy="7" r="1.2"/><circle cx="7" cy="7" r="1.2"/>
+      <circle cx="3" cy="11" r="1.2"/><circle cx="7" cy="11" r="1.2"/>
+    </svg>
+  )
+}
+
+function SortableProjectSection({ sortableId, projectName, children }: {
+  sortableId: string; projectName: string; children: React.ReactNode
+}) {
+  const { setNodeRef, attributes, listeners, transform, transition, isDragging } = useSortable({
+    id: sortableId,
+    data: { type: 'picker-project' },
+  })
+  return (
+    <div ref={setNodeRef} style={{ transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.4 : 1 }}>
+      <div className="flex items-center gap-1 px-1 mb-1 group/proj">
+        <span
+          {...attributes}
+          {...listeners}
+          className="text-gray-300 hover:text-gray-500 cursor-grab active:cursor-grabbing flex-shrink-0"
+          title="Drag to reorder"
+        >
+          <PickerGripIcon />
+        </span>
+        <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider flex-1 truncate">{projectName}</p>
+      </div>
+      {children}
+    </div>
+  )
+}
+
 // ─── Draggable picker task ────────────────────────────────────────────────────
 
 function PickerTask({ task, alreadyAdded, onTap }: { task: Task; alreadyAdded: boolean; onTap?: () => void }) {
@@ -272,6 +309,7 @@ export function DailyView() {
   const [search, setSearch] = useState('')
   const [activeDrag, setActiveDrag] = useState<{ type: string; id: string } | null>(null)
   const [mobileTab, setMobileTab] = useState<'priority' | 'tasks'>('priority')
+  const [pickerProjectOrder, setPickerProjectOrder] = useState<string[]>([])
 
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }))
 
@@ -285,9 +323,20 @@ export function DailyView() {
     !doneColumnIds.has(t.columnId) &&
     (!search || t.title.toLowerCase().includes(search.toLowerCase()))
   )
-  const projectsWithTasks = projects
-    .map((p) => ({ project: p, tasks: pickerTasks.filter((t) => t.projectId === p.id) }))
-    .filter((g) => g.tasks.length > 0)
+  const projectsWithTasks = (() => {
+    const base = [...projects]
+      .sort((a, b) => a.order - b.order)
+      .map((p) => ({ project: p, tasks: pickerTasks.filter((t) => t.projectId === p.id) }))
+      .filter((g) => g.tasks.length > 0)
+    if (!pickerProjectOrder.length) return base
+    return [
+      ...pickerProjectOrder.flatMap((id) => {
+        const entry = base.find((g) => g.project.id === id)
+        return entry ? [entry] : []
+      }),
+      ...base.filter((g) => !pickerProjectOrder.includes(g.project.id)),
+    ]
+  })()
 
   const onDragStart = ({ active }: DragStartEvent) =>
     setActiveDrag({ type: active.data.current?.type, id: active.id as string })
@@ -299,7 +348,14 @@ export function DailyView() {
     const activeType = active.data.current?.type
     const overType = over.data.current?.type
 
-    if (activeType === 'picker-task') {
+    if (activeType === 'picker-project') {
+      const ids = projectsWithTasks.map((g) => `pp:${g.project.id}`)
+      const oldIndex = ids.indexOf(active.id as string)
+      const newIndex = ids.indexOf(over.id as string)
+      if (oldIndex !== -1 && newIndex !== -1 && oldIndex !== newIndex) {
+        setPickerProjectOrder(arrayMove(projectsWithTasks.map((g) => g.project.id), oldIndex, newIndex))
+      }
+    } else if (activeType === 'picker-task') {
       const taskId = active.id as string
       const overIndex = overType === 'priority-item' ? priorityEntries.findIndex((dt) => dt.id === over.id) : -1
       addToDaily(taskId, date, overIndex === -1 ? priorityEntries.length : overIndex)
@@ -452,21 +508,25 @@ export function DailyView() {
             </div>
             <div className="flex-1 overflow-y-auto p-3 flex flex-col gap-4">
               {projectsWithTasks.length === 0 && <p className="text-sm text-gray-400 text-center py-8">No tasks found</p>}
-              {projectsWithTasks.map(({ project, tasks: pts }) => (
-                <div key={project.id}>
-                  <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider px-1 mb-1">{project.name}</p>
-                  <div className="flex flex-col gap-0.5">
-                    {pts.map((t) => (
-                      <PickerTask
-                        key={t.id}
-                        task={t}
-                        alreadyAdded={assignedTaskIds.has(t.id)}
-                        onTap={() => handleTapAdd(t.id)}
-                      />
-                    ))}
-                  </div>
-                </div>
-              ))}
+              <SortableContext
+                items={projectsWithTasks.map((g) => `pp:${g.project.id}`)}
+                strategy={verticalListSortingStrategy}
+              >
+                {projectsWithTasks.map(({ project, tasks: pts }) => (
+                  <SortableProjectSection key={project.id} sortableId={`pp:${project.id}`} projectName={project.name}>
+                    <div className="flex flex-col gap-0.5">
+                      {pts.map((t) => (
+                        <PickerTask
+                          key={t.id}
+                          task={t}
+                          alreadyAdded={assignedTaskIds.has(t.id)}
+                          onTap={() => handleTapAdd(t.id)}
+                        />
+                      ))}
+                    </div>
+                  </SortableProjectSection>
+                ))}
+              </SortableContext>
             </div>
           </div>
         </div>
