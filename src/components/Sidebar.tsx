@@ -54,7 +54,7 @@ function GripIcon() {
 
 // ─── Sortable project row ─────────────────────────────────────────────────────
 
-function SortableProjectRow({ project, isActive }: { project: Project; isActive: boolean }) {
+function SortableProjectRow({ project, isActive, onNavigate }: { project: Project; isActive: boolean; onNavigate?: () => void }) {
   const { groups, renameProject, moveProjectToGroup, deleteProject, setActiveProject, setCurrentView } = useScrumStore()
   const [editing, setEditing] = useState(false)
   const [name, setName] = useState(project.name)
@@ -117,10 +117,10 @@ function SortableProjectRow({ project, isActive }: { project: Project; isActive:
         <GripIcon />
       </span>
       <button
-        className={`flex-1 min-w-0 text-left text-xs rounded px-2 py-2 transition-colors flex items-center gap-1 ${
+        className={`flex-1 min-w-0 text-left text-xs rounded px-2 py-2.5 md:py-2 transition-colors flex items-center gap-1 ${
           isActive ? 'bg-indigo-600 text-white' : 'text-gray-300 hover:bg-gray-700'
         }`}
-        onClick={() => { setActiveProject(project.id); setCurrentView('board') }}
+        onClick={() => { setActiveProject(project.id); setCurrentView('board'); onNavigate?.() }}
       >
         <span className="truncate flex-1">{project.name}</span>
         <span className="flex items-center gap-0.5 opacity-0 group-hover/row:opacity-100">
@@ -227,7 +227,7 @@ function GroupDropZone({ groupId, children, empty }: { groupId: string | null; c
 
 // ─── Sidebar ─────────────────────────────────────────────────────────────────
 
-export function Sidebar() {
+export function Sidebar({ isOpen = false, onClose }: { isOpen?: boolean; onClose?: () => void }) {
   const { groups, projects, activeProjectId, currentView, setCurrentView, addProject, addGroup, renameGroup, moveProject, reorderGroups } = useScrumStore()
 
   const [addingProject, setAddingProject] = useState<string | 'ungrouped' | null>(null)
@@ -298,20 +298,41 @@ export function Sidebar() {
 
   const groupHeaderProps = { editingGroupId, editGroupName, setEditingGroupId, setEditGroupName, saveGroupName }
 
+  const navigate = (view: 'daily' | 'calendar') => {
+    setCurrentView(view)
+    onClose?.()
+  }
+
   return (
-    <aside className="w-56 flex-shrink-0 bg-gray-900 text-white flex flex-col h-full">
-      <div className="p-4 border-b border-gray-700">
-        <h1 className="text-lg font-bold tracking-tight">ScrumBoard</h1>
-        <p className="text-xs text-gray-400 mt-0.5">Manage your projects</p>
+    <aside className={`
+      w-64 md:w-56 flex-shrink-0 bg-gray-900 text-white flex flex-col h-full
+      fixed inset-y-0 left-0 z-50 transition-transform duration-200
+      md:relative md:inset-auto md:z-auto md:translate-x-0
+      ${isOpen ? 'translate-x-0' : '-translate-x-full'}
+    `}>
+      <div className="p-4 border-b border-gray-700 flex items-center gap-2">
+        <div className="flex-1 min-w-0">
+          <h1 className="text-lg font-bold tracking-tight">ScrumBoard</h1>
+          <p className="text-xs text-gray-400 mt-0.5">Manage your projects</p>
+        </div>
+        <button
+          className="md:hidden text-gray-400 hover:text-white p-1.5 rounded-lg hover:bg-gray-700 flex-shrink-0"
+          onClick={onClose}
+          aria-label="Close menu"
+        >
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+          </svg>
+        </button>
       </div>
 
       <div className="flex-1 overflow-y-auto py-3 flex flex-col gap-0.5">
         {/* Today shortcut */}
         <button
-          className={`mx-2 flex items-center gap-2 text-sm rounded-lg px-3 py-2 transition-colors ${
+          className={`mx-2 flex items-center gap-2 text-sm rounded-lg px-3 py-2.5 md:py-2 transition-colors ${
             currentView === 'daily' ? 'bg-indigo-600 text-white' : 'text-gray-300 hover:bg-gray-700'
           }`}
-          onClick={() => setCurrentView('daily')}
+          onClick={() => navigate('daily')}
         >
           <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>
@@ -319,10 +340,10 @@ export function Sidebar() {
           Daily Tasks
         </button>
         <button
-          className={`mx-2 mb-2 flex items-center gap-2 text-sm rounded-lg px-3 py-2 transition-colors ${
+          className={`mx-2 mb-2 flex items-center gap-2 text-sm rounded-lg px-3 py-2.5 md:py-2 transition-colors ${
             currentView === 'calendar' ? 'bg-indigo-600 text-white' : 'text-gray-300 hover:bg-gray-700'
           }`}
-          onClick={() => setCurrentView('calendar')}
+          onClick={() => navigate('calendar')}
         >
           <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/><line x1="8" y1="14" x2="16" y2="14"/><line x1="8" y1="18" x2="12" y2="18"/>
@@ -348,7 +369,7 @@ export function Sidebar() {
                     <SortableContext items={groupProjects.map((p) => p.id)} strategy={verticalListSortingStrategy}>
                       <GroupDropZone groupId={group.id} empty={groupProjects.length === 0}>
                         {groupProjects.map((p) => (
-                          <SortableProjectRow key={p.id} project={p} isActive={activeProjectId === p.id} />
+                          <SortableProjectRow key={p.id} project={p} isActive={activeProjectId === p.id} onNavigate={onClose} />
                         ))}
                       </GroupDropZone>
                     </SortableContext>
@@ -383,7 +404,7 @@ export function Sidebar() {
               <SortableContext items={ungrouped.map((p) => p.id)} strategy={verticalListSortingStrategy}>
                 <GroupDropZone groupId={null} empty={ungrouped.length === 0}>
                   {ungrouped.map((p) => (
-                    <SortableProjectRow key={p.id} project={p} isActive={activeProjectId === p.id} />
+                    <SortableProjectRow key={p.id} project={p} isActive={activeProjectId === p.id} onNavigate={onClose} />
                   ))}
                 </GroupDropZone>
               </SortableContext>

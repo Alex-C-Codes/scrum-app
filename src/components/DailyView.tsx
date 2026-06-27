@@ -40,8 +40,13 @@ function EmptyPriorityZone() {
         isOver ? 'border-indigo-400 bg-indigo-50' : 'border-gray-200'
       }`}
     >
-      <p className={`text-sm transition-colors ${isOver ? 'text-indigo-500 font-medium' : 'text-gray-400'}`}>
-        {isOver ? '+ Add to today' : 'Drag tasks here from the panel →'}
+      <p className={`text-sm text-center px-4 transition-colors ${isOver ? 'text-indigo-500 font-medium' : 'text-gray-400'}`}>
+        {isOver ? '+ Add to today' : (
+          <>
+            <span className="hidden md:inline">Drag tasks here from the panel →</span>
+            <span className="md:hidden">Tap + on tasks in the "Add Tasks" tab</span>
+          </>
+        )}
       </p>
     </div>
   )
@@ -98,15 +103,16 @@ function PriorityItem({ dailyTask, rank, task, projectName, columnName }: {
         <p className="text-sm font-semibold text-gray-800 truncate">{task.title}</p>
         <p className="text-xs text-gray-500 mt-0.5">{projectName} · {columnName}</p>
       </div>
-      <div className="flex gap-1 flex-shrink-0 opacity-0 group-hover/item:opacity-100">
+      {/* Always visible on mobile, hover-reveal on desktop */}
+      <div className="flex gap-1 flex-shrink-0 opacity-100 md:opacity-0 md:group-hover/item:opacity-100">
         <button
-          className="w-6 h-6 rounded-full border-2 border-green-400 text-green-500 hover:bg-green-50 flex items-center justify-center text-xs font-bold"
+          className="w-7 h-7 md:w-6 md:h-6 rounded-full border-2 border-green-400 text-green-500 hover:bg-green-50 flex items-center justify-center text-xs font-bold"
           onPointerDown={(e) => e.stopPropagation()}
           onClick={() => toggleDailyTaskComplete(dailyTask.id)}
           title="Mark as done"
         >✓</button>
         <button
-          className="w-6 h-6 rounded-full text-gray-400 hover:text-red-400 hover:bg-red-50 flex items-center justify-center text-base leading-none"
+          className="w-7 h-7 md:w-6 md:h-6 rounded-full text-gray-400 hover:text-red-400 hover:bg-red-50 flex items-center justify-center text-base leading-none"
           onPointerDown={(e) => e.stopPropagation()}
           onClick={() => removeFromDaily(dailyTask.id)}
           title="Remove"
@@ -134,7 +140,7 @@ function CompletedItem({ dailyTask, task, projectName }: {
         <p className="text-xs text-gray-400 truncate">{projectName}</p>
       </div>
       <button
-        className="opacity-0 group-hover/done:opacity-100 text-gray-300 hover:text-red-400 text-base leading-none"
+        className="opacity-100 md:opacity-0 md:group-hover/done:opacity-100 text-gray-300 hover:text-red-400 text-base leading-none p-1"
         onClick={() => removeFromDaily(dailyTask.id)}
       >×</button>
     </div>
@@ -143,7 +149,7 @@ function CompletedItem({ dailyTask, task, projectName }: {
 
 // ─── Draggable picker task ────────────────────────────────────────────────────
 
-function PickerTask({ task, alreadyAdded }: { task: Task; alreadyAdded: boolean }) {
+function PickerTask({ task, alreadyAdded, onTap }: { task: Task; alreadyAdded: boolean; onTap?: () => void }) {
   const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
     id: task.id,
     data: { type: 'picker-task' },
@@ -153,13 +159,25 @@ function PickerTask({ task, alreadyAdded }: { task: Task; alreadyAdded: boolean 
     <div
       ref={setNodeRef}
       {...(alreadyAdded ? {} : { ...attributes, ...listeners })}
-      className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-colors ${
+      className={`flex items-center gap-2 px-3 py-2.5 md:py-2 rounded-lg text-sm transition-colors ${
         alreadyAdded ? 'text-gray-400 cursor-default' : 'text-gray-700 hover:bg-gray-100 cursor-grab active:cursor-grabbing'
       } ${isDragging ? 'opacity-40' : ''}`}
       style={{ backgroundColor: alreadyAdded ? undefined : task.color + '55' }}
     >
-      {alreadyAdded ? <span className="text-green-500 text-xs">✓</span> : <span className="text-gray-400 text-xs">⠿</span>}
+      {alreadyAdded
+        ? <span className="text-green-500 text-xs flex-shrink-0">✓</span>
+        : <span className="text-gray-400 text-xs hidden md:inline flex-shrink-0">⠿</span>
+      }
       <span className="truncate flex-1">{task.title}</span>
+      {/* Tap-to-add button on mobile */}
+      {!alreadyAdded && (
+        <button
+          className="md:hidden w-7 h-7 rounded-full bg-indigo-600 text-white flex items-center justify-center text-lg font-bold flex-shrink-0"
+          onPointerDown={(e) => e.stopPropagation()}
+          onClick={(e) => { e.stopPropagation(); onTap?.() }}
+          aria-label="Add task"
+        >+</button>
+      )}
     </div>
   )
 }
@@ -215,7 +233,7 @@ function HabitRow({ habit, today, completions }: { habit: Habit; today: string; 
     <div className={`flex items-center gap-3 rounded-lg px-3 py-2.5 border transition-colors ${isDone ? 'bg-gray-50 border-gray-200' : 'bg-white border-gray-200 hover:border-gray-300'}`}>
       <button
         onClick={() => toggleHabitCompletion(habit.id, today)}
-        className={`w-5 h-5 rounded-full border-2 flex items-center justify-center flex-shrink-0 transition-colors ${
+        className={`w-6 h-6 md:w-5 md:h-5 rounded-full border-2 flex items-center justify-center flex-shrink-0 transition-colors ${
           isDone ? 'border-green-400 bg-green-400 text-white' : 'border-gray-300 hover:border-green-400'
         }`}
       >
@@ -225,8 +243,8 @@ function HabitRow({ habit, today, completions }: { habit: Habit; today: string; 
         <p className={`text-sm font-medium truncate ${isDone ? 'text-gray-400 line-through' : 'text-gray-800'}`}>{habit.title}</p>
         <p className="text-xs text-gray-400">{project?.name}</p>
       </div>
-      {/* Last 7 days dots — only show scheduled days */}
-      <div className="flex gap-0.5 flex-shrink-0 items-center">
+      {/* Last 7 days dots — hidden on smallest screens */}
+      <div className="hidden sm:flex gap-0.5 flex-shrink-0 items-center">
         {dots.map((d, i) => (
           d.scheduled
             ? <div key={i} className="w-2.5 h-2.5 rounded-full border" title={d.date}
@@ -253,6 +271,7 @@ export function DailyView() {
   const setDate = setDailyViewDate
   const [search, setSearch] = useState('')
   const [activeDrag, setActiveDrag] = useState<{ type: string; id: string } | null>(null)
+  const [mobileTab, setMobileTab] = useState<'priority' | 'tasks'>('priority')
 
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }))
 
@@ -303,38 +322,59 @@ export function DailyView() {
       : allDayEntries.find((dt) => dt.id === activeDrag.id)?.taskId)
   ) : null
 
+  const handleTapAdd = (taskId: string) => {
+    addToDaily(taskId, date, priorityEntries.length)
+    setMobileTab('priority')
+  }
+
   return (
     <div className="flex-1 flex flex-col overflow-hidden">
       {/* Header */}
-      <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <button onClick={() => setDate(shiftDate(date, -1))} className="text-gray-400 hover:text-gray-700 p-1 rounded hover:bg-gray-100">
+      <div className="px-4 md:px-6 py-3 md:py-4 border-b border-gray-200 flex items-center justify-between flex-shrink-0">
+        <div className="flex items-center gap-2 md:gap-3">
+          <button onClick={() => setDate(shiftDate(date, -1))} className="text-gray-400 hover:text-gray-700 p-1.5 md:p-1 rounded hover:bg-gray-100">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="15 18 9 12 15 6"/></svg>
           </button>
           <div>
-            <h2 className="text-xl font-bold text-gray-800">{formatDate(date)}</h2>
+            <h2 className="text-lg md:text-xl font-bold text-gray-800">{formatDate(date)}</h2>
             <p className="text-xs text-gray-400">{date}</p>
           </div>
-          <button onClick={() => setDate(shiftDate(date, 1))} className="text-gray-400 hover:text-gray-700 p-1 rounded hover:bg-gray-100">
+          <button onClick={() => setDate(shiftDate(date, 1))} className="text-gray-400 hover:text-gray-700 p-1.5 md:p-1 rounded hover:bg-gray-100">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="9 18 15 12 9 6"/></svg>
           </button>
           {date !== toDateStr(new Date()) && (
             <button onClick={() => setDate(toDateStr(new Date()))} className="text-xs text-indigo-600 hover:text-indigo-700 px-2 py-1 rounded hover:bg-indigo-50">
-              Jump to today
+              Today
             </button>
           )}
         </div>
-        <div className="flex items-center gap-3 text-sm text-gray-500">
+        <div className="flex items-center gap-2 md:gap-3 text-sm text-gray-500">
           {completedEntries.length > 0 && <span className="text-green-500 font-medium">{completedEntries.length} done</span>}
-          <span>{priorityEntries.length} remaining</span>
+          <span className="hidden sm:inline">{priorityEntries.length} remaining</span>
         </div>
+      </div>
+
+      {/* Mobile tab bar */}
+      <div className="md:hidden flex border-b border-gray-200 flex-shrink-0">
+        <button
+          className={`flex-1 py-2.5 text-sm font-medium transition-colors ${mobileTab === 'priority' ? 'border-b-2 border-indigo-600 text-indigo-600 bg-indigo-50/50' : 'text-gray-500'}`}
+          onClick={() => setMobileTab('priority')}
+        >
+          Priority {priorityEntries.length > 0 && `(${priorityEntries.length})`}
+        </button>
+        <button
+          className={`flex-1 py-2.5 text-sm font-medium transition-colors ${mobileTab === 'tasks' ? 'border-b-2 border-indigo-600 text-indigo-600 bg-indigo-50/50' : 'text-gray-500'}`}
+          onClick={() => setMobileTab('tasks')}
+        >
+          Add Tasks
+        </button>
       </div>
 
       <DndContext sensors={sensors} collisionDetection={closestCenter} onDragStart={onDragStart} onDragEnd={onDragEnd}>
         <div className="flex-1 flex overflow-hidden">
 
           {/* Left: priority + done */}
-          <div className="flex-1 flex flex-col overflow-y-auto p-6 gap-4">
+          <div className={`flex-1 flex flex-col overflow-y-auto p-4 md:p-6 gap-4 ${mobileTab !== 'priority' ? 'hidden md:flex' : 'flex'}`}>
 
             {/* Priority list */}
             <div className="flex flex-col gap-2">
@@ -383,7 +423,7 @@ export function DailyView() {
                 <div className="flex flex-col gap-2">
                   <div className="flex items-center justify-between">
                     <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Habits</h3>
-                    <div className="flex gap-3 text-xs text-gray-400 pr-1">
+                    <div className="hidden sm:flex gap-3 text-xs text-gray-400 pr-1">
                       <span>last 7d</span>
                       <span className="w-14 text-right">stats</span>
                     </div>
@@ -396,15 +436,15 @@ export function DailyView() {
             })()}
           </div>
 
-          {/* Divider */}
-          <div className="w-px bg-gray-200 flex-shrink-0" />
+          {/* Divider — desktop only */}
+          <div className="hidden md:block w-px bg-gray-200 flex-shrink-0" />
 
           {/* Right: task picker */}
-          <div className="w-72 flex-shrink-0 flex flex-col overflow-hidden">
+          <div className={`flex-shrink-0 flex flex-col overflow-hidden w-full md:w-72 ${mobileTab !== 'tasks' ? 'hidden md:flex' : 'flex'}`}>
             <div className="p-4 border-b border-gray-100">
               <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">Add Tasks</h3>
               <input
-                className="w-full text-sm bg-gray-100 rounded-lg px-3 py-1.5 outline-none focus:bg-white focus:ring-2 focus:ring-indigo-300"
+                className="w-full text-sm bg-gray-100 rounded-lg px-3 py-2 md:py-1.5 outline-none focus:bg-white focus:ring-2 focus:ring-indigo-300"
                 placeholder="Search tasks..."
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
@@ -416,7 +456,14 @@ export function DailyView() {
                 <div key={project.id}>
                   <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider px-1 mb-1">{project.name}</p>
                   <div className="flex flex-col gap-0.5">
-                    {pts.map((t) => <PickerTask key={t.id} task={t} alreadyAdded={assignedTaskIds.has(t.id)} />)}
+                    {pts.map((t) => (
+                      <PickerTask
+                        key={t.id}
+                        task={t}
+                        alreadyAdded={assignedTaskIds.has(t.id)}
+                        onTap={() => handleTapAdd(t.id)}
+                      />
+                    ))}
                   </div>
                 </div>
               ))}

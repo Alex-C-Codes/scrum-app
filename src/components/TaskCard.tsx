@@ -183,21 +183,21 @@ export function TaskCard({ task }: Props) {
       )}
 
       <button
-        className="absolute top-1.5 right-1.5 opacity-0 group-hover:opacity-100 text-gray-500 hover:text-red-500 text-xs w-5 h-5 flex items-center justify-center rounded hover:bg-black/10 transition-opacity"
+        className="absolute top-1.5 right-1.5 opacity-100 md:opacity-0 md:group-hover:opacity-100 text-gray-500 hover:text-red-500 text-xs w-6 h-6 md:w-5 md:h-5 flex items-center justify-center rounded hover:bg-black/10 transition-opacity"
         onPointerDown={(e) => e.stopPropagation()}
         onClick={(e) => { e.stopPropagation(); deleteTask(task.id) }}
       >
         ×
       </button>
       <button
-        className={`absolute bottom-1.5 right-1.5 opacity-0 group-hover:opacity-100 text-xs w-5 h-5 flex items-center justify-center rounded hover:bg-black/10 transition-opacity ${isInToday ? 'text-indigo-500' : 'text-gray-400 hover:text-indigo-500'}`}
+        className={`absolute bottom-1.5 right-1.5 opacity-100 md:opacity-0 md:group-hover:opacity-100 text-xs w-6 h-6 md:w-5 md:h-5 flex items-center justify-center rounded hover:bg-black/10 transition-opacity ${isInToday ? 'text-indigo-500' : 'text-gray-400 hover:text-indigo-500'}`}
         onPointerDown={(e) => e.stopPropagation()}
         onClick={(e) => { e.stopPropagation(); addToDaily(task.id, todayStr) }}
         title={isInToday ? 'Already in today' : 'Add to today'}
       >
         {isInToday ? '★' : '☆'}
       </button>
-      <p className="text-xs text-gray-400 mt-2">Double-click to edit</p>
+      <p className="hidden md:block text-xs text-gray-400 mt-2">Double-click to edit</p>
     </div>
   )
 }
