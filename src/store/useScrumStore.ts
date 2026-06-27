@@ -40,6 +40,7 @@ interface ScrumState {
   renameProject: (id: string, name: string) => void
   moveProjectToGroup: (id: string, groupId: string | null) => void
   moveProject: (projectId: string, targetGroupId: string | null, overProjectId: string | null) => void
+  reorderAllProjects: (orderedIds: string[]) => void
   deleteProject: (id: string) => void
   setActiveProject: (id: string) => void
 
@@ -333,6 +334,16 @@ export const useScrumStore = create<ScrumState>()((set, get) => ({
       ],
     })
     db.projects.upsertMany([...reorderedTarget, ...reorderedSource])
+  },
+
+  reorderAllProjects: (orderedIds) => {
+    const { projects } = get()
+    // Build full order: user-specified first, then any remaining projects in their current relative order
+    const rest = [...projects].sort((a, b) => a.order - b.order).filter((p) => !orderedIds.includes(p.id))
+    const fullOrder = [...orderedIds, ...rest.map((p) => p.id)]
+    const updated = projects.map((p) => ({ ...p, order: fullOrder.indexOf(p.id) }))
+    set({ projects: updated })
+    db.projects.upsertMany(updated)
   },
 
   deleteProject: (id) => {

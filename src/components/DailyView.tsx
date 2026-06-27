@@ -303,13 +303,12 @@ function HabitRow({ habit, today, completions }: { habit: Habit; today: string; 
 // ─── DailyView ────────────────────────────────────────────────────────────────
 
 export function DailyView() {
-  const { projects, columns, tasks, dailyTasks, habits, habitCompletions, dailyViewDate, setDailyViewDate, addToDaily, reorderDailyTasks, toggleDailyTaskComplete } = useScrumStore()
+  const { projects, columns, tasks, dailyTasks, habits, habitCompletions, dailyViewDate, setDailyViewDate, addToDaily, reorderDailyTasks, toggleDailyTaskComplete, reorderAllProjects } = useScrumStore()
   const date = dailyViewDate
   const setDate = setDailyViewDate
   const [search, setSearch] = useState('')
   const [activeDrag, setActiveDrag] = useState<{ type: string; id: string } | null>(null)
   const [mobileTab, setMobileTab] = useState<'priority' | 'tasks'>('priority')
-  const [pickerProjectOrder, setPickerProjectOrder] = useState<string[]>([])
 
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }))
 
@@ -323,20 +322,10 @@ export function DailyView() {
     !doneColumnIds.has(t.columnId) &&
     (!search || t.title.toLowerCase().includes(search.toLowerCase()))
   )
-  const projectsWithTasks = (() => {
-    const base = [...projects]
-      .sort((a, b) => a.order - b.order)
-      .map((p) => ({ project: p, tasks: pickerTasks.filter((t) => t.projectId === p.id) }))
-      .filter((g) => g.tasks.length > 0)
-    if (!pickerProjectOrder.length) return base
-    return [
-      ...pickerProjectOrder.flatMap((id) => {
-        const entry = base.find((g) => g.project.id === id)
-        return entry ? [entry] : []
-      }),
-      ...base.filter((g) => !pickerProjectOrder.includes(g.project.id)),
-    ]
-  })()
+  const projectsWithTasks = [...projects]
+    .sort((a, b) => a.order - b.order)
+    .map((p) => ({ project: p, tasks: pickerTasks.filter((t) => t.projectId === p.id) }))
+    .filter((g) => g.tasks.length > 0)
 
   const onDragStart = ({ active }: DragStartEvent) =>
     setActiveDrag({ type: active.data.current?.type, id: active.id as string })
@@ -353,7 +342,8 @@ export function DailyView() {
       const oldIndex = ids.indexOf(active.id as string)
       const newIndex = ids.indexOf(over.id as string)
       if (oldIndex !== -1 && newIndex !== -1 && oldIndex !== newIndex) {
-        setPickerProjectOrder(arrayMove(projectsWithTasks.map((g) => g.project.id), oldIndex, newIndex))
+        const reordered = arrayMove(projectsWithTasks.map((g) => g.project.id), oldIndex, newIndex)
+        reorderAllProjects(reordered)
       }
     } else if (activeType === 'picker-task') {
       const taskId = active.id as string
