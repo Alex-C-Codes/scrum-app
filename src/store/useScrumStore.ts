@@ -1,7 +1,7 @@
 import { create } from 'zustand'
 import { v4 as uuid } from 'uuid'
 import { db } from '../lib/db'
-import type { Task, Column, Project, ProjectGroup, DailyTask, Member, Habit, HabitCompletion } from '../types'
+import type { Task, Column, Project, ProjectGroup, DailyTask, Member, Habit, HabitCompletion, ChecklistItem } from '../types'
 import { MEMBER_COLORS } from '../types'
 
 interface ScrumState {
@@ -61,8 +61,8 @@ interface ScrumState {
   toggleHabitCompletion: (habitId: string, date: string) => void
 
   // Tasks
-  addTask: (columnId: string, projectId: string, title: string, description: string, color: string) => void
-  updateTask: (id: string, updates: Partial<Pick<Task, 'title' | 'description' | 'color' | 'assigneeId'>>) => void
+  addTask: (columnId: string, projectId: string, title: string, description: string, color: string, checklist?: ChecklistItem[]) => void
+  updateTask: (id: string, updates: Partial<Pick<Task, 'title' | 'description' | 'color' | 'assigneeId' | 'checklist'>>) => void
   deleteTask: (id: string) => void
   moveTask: (taskId: string, targetColumnId: string, newOrder: number) => void
   reorderTasks: (columnId: string, orderedIds: string[]) => void
@@ -384,9 +384,9 @@ export const useScrumStore = create<ScrumState>()((set, get) => ({
 
   // ── Tasks ─────────────────────────────────────────────────────────────────
 
-  addTask: (columnId, projectId, title, description, color) => {
+  addTask: (columnId, projectId, title, description, color, checklist = []) => {
     const order = get().tasks.filter((t) => t.columnId === columnId).length
-    const task: Task = { id: uuid(), title, description, color, columnId, projectId, order, createdAt: Date.now(), assigneeId: null }
+    const task: Task = { id: uuid(), title, description, color, columnId, projectId, order, createdAt: Date.now(), assigneeId: null, checklist }
     set((s) => ({ tasks: [...s.tasks, task] }))
     db.tasks.insert(task)
   },

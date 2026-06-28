@@ -1,7 +1,8 @@
-import { useState } from 'react'
+import { useState, useRef } from 'react'
 import { useSortable } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
-import type { Task } from '../types'
+import { v4 as uuid } from 'uuid'
+import type { Task, ChecklistItem } from '../types'
 import { TASK_COLORS } from '../types'
 import { useScrumStore } from '../store/useScrumStore'
 
@@ -19,7 +20,10 @@ export function TaskCard({ task }: Props) {
   const [description, setDescription] = useState(task.description)
   const [color, setColor] = useState(task.color)
   const [assigneeId, setAssigneeId] = useState<string | null>(task.assigneeId)
+  const [checklist, setChecklist] = useState<ChecklistItem[]>(task.checklist)
   const [newMemberName, setNewMemberName] = useState('')
+  const [newItemText, setNewItemText] = useState('')
+  const newItemRef = useRef<HTMLInputElement>(null)
 
   const { updateTask, deleteTask, addToDaily, dailyTasks, members, addMember } = useScrumStore()
   const todayStr = new Date().toLocaleDateString('en-CA')
@@ -40,9 +44,18 @@ export function TaskCard({ task }: Props) {
 
   const save = () => {
     if (title.trim()) {
-      updateTask(task.id, { title: title.trim(), description, color, assigneeId })
+      updateTask(task.id, { title: title.trim(), description, color, assigneeId, checklist })
     }
     setEditing(false)
+  }
+
+  const openEdit = () => {
+    setTitle(task.title)
+    setDescription(task.description)
+    setColor(task.color)
+    setAssigneeId(task.assigneeId)
+    setChecklist(task.checklist)
+    setEditing(true)
   }
 
   const handleAddMember = () => {
@@ -51,6 +64,36 @@ export function TaskCard({ task }: Props) {
     setAssigneeId(id)
     setNewMemberName('')
   }
+
+  // ── Checklist helpers (edit mode) ──────────────────────────────────────────
+
+  const addChecklistItem = () => {
+    if (!newItemText.trim()) return
+    setChecklist((prev) => [...prev, { id: uuid(), text: newItemText.trim(), checked: false }])
+    setNewItemText('')
+    setTimeout(() => newItemRef.current?.focus(), 0)
+  }
+
+  const removeChecklistItem = (id: string) =>
+    setChecklist((prev) => prev.filter((i) => i.id !== id))
+
+  const updateChecklistItemText = (id: string, text: string) =>
+    setChecklist((prev) => prev.map((i) => (i.id === id ? { ...i, text } : i)))
+
+  const toggleChecklistItemEdit = (id: string) =>
+    setChecklist((prev) => prev.map((i) => (i.id === id ? { ...i, checked: !i.checked } : i)))
+
+  // ── Checklist toggle in view mode (persists immediately) ───────────────────
+
+  const toggleChecklistItemView = (itemId: string) => {
+    const newChecklist = task.checklist.map((i) => (i.id === itemId ? { ...i, checked: !i.checked } : i))
+    updateTask(task.id, { checklist: newChecklist })
+  }
+
+  const doneCount = task.checklist.filter((i) => i.checked).length
+  const totalCount = task.checklist.length
+
+  // ── Edit mode ──────────────────────────────────────────────────────────────
 
   if (editing) {
     return (
@@ -65,7 +108,7 @@ export function TaskCard({ task }: Props) {
         />
         <textarea
           className="w-full bg-transparent text-xs outline-none resize-none"
-          rows={3}
+          rows={2}
           value={description}
           onChange={(e) => setDescription(e.target.value)}
           placeholder="Description (optional)"
@@ -81,6 +124,53 @@ export function TaskCard({ task }: Props) {
               onClick={() => setColor(c)}
             />
           ))}
+        </div>
+
+        {/* Checklist */}
+        <div className="flex flex-col gap-1 border-t border-black/10 pt-2">
+          <p className="text-xs font-medium text-gray-600">Checklist</p>
+          {checklist.map((item) => (
+            <div key={item.id} className="flex items-center gap-1.5 group/ci">
+              <button
+                className={`w-3.5 h-3.5 rounded border-2 flex-shrink-0 flex items-center justify-center transition-colors ${
+                  item.checked ? 'bg-gray-700 border-gray-700' : 'border-gray-400 hover:border-gray-600'
+                }`}
+                onClick={() => toggleChecklistItemEdit(item.id)}
+              >
+                {item.checked && (
+                  <svg width="8" height="8" viewBox="0 0 10 10" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round">
+                    <polyline points="1.5 5 4 7.5 8.5 2"/>
+                  </svg>
+                )}
+              </button>
+              <input
+                className={`flex-1 bg-transparent text-xs outline-none border-b border-transparent focus:border-black/20 ${item.checked ? 'line-through text-gray-400' : 'text-gray-800'}`}
+                value={item.text}
+                onChange={(e) => updateChecklistItemText(item.id, e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') { e.preventDefault(); newItemRef.current?.focus() }
+                  if (e.key === 'Backspace' && !item.text) removeChecklistItem(item.id)
+                }}
+              />
+              <button
+                className="opacity-0 group-hover/ci:opacity-100 text-gray-400 hover:text-red-400 text-base leading-none flex-shrink-0 transition-opacity"
+                onClick={() => removeChecklistItem(item.id)}
+              >×</button>
+            </div>
+          ))}
+          {/* Add new item */}
+          <div className="flex items-center gap-1.5 mt-0.5">
+            <div className="w-3.5 h-3.5 rounded border-2 border-dashed border-gray-300 flex-shrink-0" />
+            <input
+              ref={newItemRef}
+              className="flex-1 bg-transparent text-xs outline-none border-b border-transparent focus:border-black/20 placeholder-gray-400"
+              placeholder="Add item…"
+              value={newItemText}
+              onChange={(e) => setNewItemText(e.target.value)}
+              onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addChecklistItem() } }}
+              onBlur={() => { if (newItemText.trim()) addChecklistItem() }}
+            />
+          </div>
         </div>
 
         {/* Assignee */}
@@ -118,7 +208,6 @@ export function TaskCard({ task }: Props) {
               </button>
             ))}
           </div>
-          {/* Add new member inline */}
           <div className="flex gap-1">
             <input
               className="flex-1 bg-white/50 text-xs rounded px-2 py-1 outline-none border border-black/15 placeholder-gray-400"
@@ -139,7 +228,7 @@ export function TaskCard({ task }: Props) {
         <div className="flex gap-2 justify-end">
           <button
             className="text-xs px-2 py-1 rounded hover:bg-black/10"
-            onClick={() => { setTitle(task.title); setDescription(task.description); setColor(task.color); setAssigneeId(task.assigneeId); setEditing(false) }}
+            onClick={() => { setTitle(task.title); setDescription(task.description); setColor(task.color); setAssigneeId(task.assigneeId); setChecklist(task.checklist); setEditing(false) }}
           >
             Cancel
           </button>
@@ -154,6 +243,8 @@ export function TaskCard({ task }: Props) {
     )
   }
 
+  // ── View mode ──────────────────────────────────────────────────────────────
+
   return (
     <div
       ref={setNodeRef}
@@ -161,11 +252,47 @@ export function TaskCard({ task }: Props) {
       {...attributes}
       {...listeners}
       className="rounded-lg p-3 shadow-md border border-black/10 cursor-grab active:cursor-grabbing group relative"
-      onDoubleClick={() => setEditing(true)}
+      onDoubleClick={openEdit}
     >
-      <p className="font-semibold text-sm text-gray-800 break-words">{task.title}</p>
+      <p className="font-semibold text-sm text-gray-800 break-words pr-6">{task.title}</p>
       {task.description && (
         <p className="text-xs text-gray-600 mt-1 break-words">{task.description}</p>
+      )}
+
+      {/* Checklist in view mode */}
+      {totalCount > 0 && (
+        <div className="mt-2 flex flex-col gap-1" onPointerDown={(e) => e.stopPropagation()}>
+          {/* Progress bar */}
+          <div className="flex items-center gap-1.5">
+            <div className="flex-1 h-1 bg-black/10 rounded-full overflow-hidden">
+              <div
+                className="h-full bg-gray-600 rounded-full transition-all"
+                style={{ width: `${(doneCount / totalCount) * 100}%` }}
+              />
+            </div>
+            <span className="text-xs text-gray-500 flex-shrink-0">{doneCount}/{totalCount}</span>
+          </div>
+          {/* Items */}
+          {task.checklist.map((item) => (
+            <div key={item.id} className="flex items-start gap-1.5">
+              <button
+                className={`mt-0.5 w-3.5 h-3.5 rounded border-2 flex-shrink-0 flex items-center justify-center transition-colors ${
+                  item.checked ? 'bg-gray-600 border-gray-600' : 'border-gray-400 hover:border-gray-600'
+                }`}
+                onClick={(e) => { e.stopPropagation(); toggleChecklistItemView(item.id) }}
+              >
+                {item.checked && (
+                  <svg width="8" height="8" viewBox="0 0 10 10" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round">
+                    <polyline points="1.5 5 4 7.5 8.5 2"/>
+                  </svg>
+                )}
+              </button>
+              <span className={`text-xs break-words ${item.checked ? 'line-through text-gray-400' : 'text-gray-700'}`}>
+                {item.text}
+              </span>
+            </div>
+          ))}
+        </div>
       )}
 
       {/* Assignee avatar */}

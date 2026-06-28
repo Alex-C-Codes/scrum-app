@@ -1,5 +1,5 @@
 import { supabase } from './supabase'
-import type { Task, Column, Project, ProjectGroup, DailyTask, Member, Habit, HabitCompletion, RecurrenceRule } from '../types'
+import type { Task, Column, Project, ProjectGroup, DailyTask, Member, Habit, HabitCompletion, RecurrenceRule, ChecklistItem } from '../types'
 
 // Map DB snake_case rows → TS camelCase types
 const toGroup     = (r: Record<string, unknown>): ProjectGroup => ({ id: r.id as string, name: r.name as string, order: r.order as number, collapsed: r.collapsed as boolean })
@@ -8,7 +8,7 @@ const toColumn    = (r: Record<string, unknown>): Column       => ({ id: r.id as
 const toMember          = (r: Record<string, unknown>): Member          => ({ id: r.id as string, name: r.name as string, color: r.color as string })
 const toHabit           = (r: Record<string, unknown>): Habit           => ({ id: r.id as string, title: r.title as string, projectId: r.project_id as string, color: r.color as string, recurrence: (r.recurrence as RecurrenceRule) ?? { type: 'daily' }, createdAt: new Date(r.created_at as string).getTime() })
 const toHabitCompletion = (r: Record<string, unknown>): HabitCompletion => ({ id: r.id as string, habitId: r.habit_id as string, date: r.date as string })
-const toTask      = (r: Record<string, unknown>): Task         => ({ id: r.id as string, title: r.title as string, description: r.description as string, color: r.color as string, columnId: r.column_id as string, projectId: r.project_id as string, order: r.order as number, createdAt: new Date(r.created_at as string).getTime(), assigneeId: (r.assignee_id as string | null) ?? null })
+const toTask      = (r: Record<string, unknown>): Task         => ({ id: r.id as string, title: r.title as string, description: r.description as string, color: r.color as string, columnId: r.column_id as string, projectId: r.project_id as string, order: r.order as number, createdAt: new Date(r.created_at as string).getTime(), assigneeId: (r.assignee_id as string | null) ?? null, checklist: (r.checklist as ChecklistItem[]) ?? [] })
 const toDailyTask = (r: Record<string, unknown>): DailyTask    => ({ id: r.id as string, taskId: r.task_id as string, date: r.date as string, order: r.order as number, completed: (r.completed as boolean) ?? false })
 
 const fire = (p: PromiseLike<{ error: unknown }>) =>
@@ -64,9 +64,9 @@ export const db = {
   },
 
   tasks: {
-    insert:     (t: Task)      => fire(supabase.from('tasks').insert({ id: t.id, title: t.title, description: t.description, color: t.color, column_id: t.columnId, project_id: t.projectId, order: t.order, assignee_id: t.assigneeId })),
+    insert:     (t: Task)      => fire(supabase.from('tasks').insert({ id: t.id, title: t.title, description: t.description, color: t.color, column_id: t.columnId, project_id: t.projectId, order: t.order, assignee_id: t.assigneeId, checklist: t.checklist })),
     update:     (id: string, data: object) => fire(supabase.from('tasks').update(data).eq('id', id)),
-    upsertMany: (ts: Task[])   => fire(supabase.from('tasks').upsert(ts.map((t) => ({ id: t.id, title: t.title, description: t.description, color: t.color, column_id: t.columnId, project_id: t.projectId, order: t.order, assignee_id: t.assigneeId })))),
+    upsertMany: (ts: Task[])   => fire(supabase.from('tasks').upsert(ts.map((t) => ({ id: t.id, title: t.title, description: t.description, color: t.color, column_id: t.columnId, project_id: t.projectId, order: t.order, assignee_id: t.assigneeId, checklist: t.checklist })))),
     delete:     (id: string)   => fire(supabase.from('tasks').delete().eq('id', id)),
   },
 

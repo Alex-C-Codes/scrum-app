@@ -4,6 +4,12 @@ export interface Member {
   color: string
 }
 
+export interface ChecklistItem {
+  id: string
+  text: string
+  checked: boolean
+}
+
 export interface Task {
   id: string
   title: string
@@ -14,6 +20,7 @@ export interface Task {
   order: number
   createdAt: number
   assigneeId: string | null
+  checklist: ChecklistItem[]
 }
 
 export const MEMBER_COLORS = [

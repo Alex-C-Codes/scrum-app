@@ -1,7 +1,8 @@
-import { useState } from 'react'
+import { useState, useRef } from 'react'
 import { useDroppable } from '@dnd-kit/core'
 import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable'
-import type { Column as ColumnType, Task } from '../types'
+import { v4 as uuid } from 'uuid'
+import type { Column as ColumnType, Task, ChecklistItem } from '../types'
 import { TASK_COLORS } from '../types'
 import { TaskCard } from './TaskCard'
 import { useScrumStore } from '../store/useScrumStore'
@@ -16,8 +17,11 @@ export function Column({ column, tasks }: Props) {
   const [newTitle, setNewTitle] = useState('')
   const [newDesc, setNewDesc] = useState('')
   const [newColor, setNewColor] = useState(TASK_COLORS[0])
+  const [newChecklist, setNewChecklist] = useState<ChecklistItem[]>([])
+  const [newItemText, setNewItemText] = useState('')
   const [editingTitle, setEditingTitle] = useState(false)
   const [colTitle, setColTitle] = useState(column.title)
+  const newItemRef = useRef<HTMLInputElement>(null)
 
   const { addTask, renameColumn, deleteColumn } = useScrumStore()
 
@@ -25,14 +29,29 @@ export function Column({ column, tasks }: Props) {
 
   const sorted = [...tasks].sort((a, b) => a.order - b.order)
 
+  const addChecklistItem = () => {
+    if (!newItemText.trim()) return
+    setNewChecklist((prev) => [...prev, { id: uuid(), text: newItemText.trim(), checked: false }])
+    setNewItemText('')
+    setTimeout(() => newItemRef.current?.focus(), 0)
+  }
+
+  const removeChecklistItem = (id: string) =>
+    setNewChecklist((prev) => prev.filter((i) => i.id !== id))
+
   const submitTask = () => {
-    if (newTitle.trim()) {
-      addTask(column.id, column.projectId, newTitle.trim(), newDesc, newColor)
-      setNewTitle('')
-      setNewDesc('')
-      setNewColor(TASK_COLORS[0])
-      setAddingTask(false)
-    }
+    if (!newTitle.trim()) return
+    // Flush any pending checklist item text
+    const finalChecklist = newItemText.trim()
+      ? [...newChecklist, { id: uuid(), text: newItemText.trim(), checked: false }]
+      : newChecklist
+    addTask(column.id, column.projectId, newTitle.trim(), newDesc, newColor, finalChecklist)
+    setNewTitle('')
+    setNewDesc('')
+    setNewColor(TASK_COLORS[0])
+    setNewChecklist([])
+    setNewItemText('')
+    setAddingTask(false)
   }
 
   const saveColTitle = () => {
@@ -103,7 +122,34 @@ export function Column({ column, tasks }: Props) {
               onChange={(e) => setNewDesc(e.target.value)}
               placeholder="Description (optional)"
             />
-            <div className="flex gap-1">
+
+            {/* Checklist */}
+            <div className="flex flex-col gap-1 border-t border-gray-100 pt-2">
+              <p className="text-xs font-medium text-gray-500">Checklist</p>
+              {newChecklist.map((item) => (
+                <div key={item.id} className="flex items-center gap-1.5 group/ci">
+                  <div className="w-3.5 h-3.5 rounded border-2 border-gray-300 flex-shrink-0" />
+                  <span className="flex-1 text-xs text-gray-700 truncate">{item.text}</span>
+                  <button
+                    className="opacity-0 group-hover/ci:opacity-100 text-gray-400 hover:text-red-400 text-base leading-none flex-shrink-0 transition-opacity"
+                    onClick={() => removeChecklistItem(item.id)}
+                  >×</button>
+                </div>
+              ))}
+              <div className="flex items-center gap-1.5">
+                <div className="w-3.5 h-3.5 rounded border-2 border-dashed border-gray-300 flex-shrink-0" />
+                <input
+                  ref={newItemRef}
+                  className="flex-1 text-xs outline-none border-b border-transparent focus:border-gray-200 placeholder-gray-400"
+                  placeholder="Add checklist item…"
+                  value={newItemText}
+                  onChange={(e) => setNewItemText(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addChecklistItem() } }}
+                />
+              </div>
+            </div>
+
+            <div className="flex gap-1 border-t border-gray-100 pt-2">
               {TASK_COLORS.map((c) => (
                 <button
                   key={c}
@@ -114,7 +160,7 @@ export function Column({ column, tasks }: Props) {
               ))}
             </div>
             <div className="flex gap-2 justify-end">
-              <button className="text-xs px-2 py-1 rounded hover:bg-gray-100" onClick={() => setAddingTask(false)}>Cancel</button>
+              <button className="text-xs px-2 py-1 rounded hover:bg-gray-100" onClick={() => { setAddingTask(false); setNewChecklist([]); setNewItemText('') }}>Cancel</button>
               <button className="text-xs px-2 py-1 rounded bg-gray-800 text-white hover:bg-gray-700" onClick={submitTask}>Add</button>
             </div>
           </div>
